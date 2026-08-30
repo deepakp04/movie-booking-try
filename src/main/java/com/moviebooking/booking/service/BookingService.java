@@ -41,7 +41,7 @@ import java.util.stream.Collectors;
 public class BookingService {
 
     private static final int MAX_SEATS_PER_BOOKING = 10;
-    private static final int HOLD_MINUTES = 10;
+    private static final int HOLD_MINUTES = 20;
 
     // Only used for screens whose layout has never been drawn in the Maintenance
     // tab. Once screen_seats exist for a screen the real grid is used instead.

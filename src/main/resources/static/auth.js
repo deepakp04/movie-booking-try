@@ -629,7 +629,7 @@ async function continuePayment(bookingId) {
             },
             modal: {
                 ondismiss: function () {
-                    showAlert('Payment cancelled. Your seats will be held for a limited time.', 'error');
+                    showAlert('Payment cancelled. Your seats are held for 20 minutes. Come back to pay from My Bookings.', 'error');
                 }
             }
         };

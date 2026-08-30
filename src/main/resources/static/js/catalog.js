@@ -383,6 +383,7 @@ let activeBookingId = null;
 let holdCountdownInterval = null;
 let holdExpiresAt = null;
 let seatEventSource = null; // SSE connection for real-time seat updates
+let myHeldSeats = new Set(); // Tracks which seats the current user is holding
 
 // On page load, check if there's an active hold session to resume
 function resumeHoldSession() {
@@ -424,6 +425,7 @@ function clearHoldSession() {
     localStorage.removeItem('activeShowContext');
     activeBookingId = null;
     holdExpiresAt = null;
+    myHeldSeats = new Set();
     clearHoldCountdown();
 }
 
@@ -705,7 +707,7 @@ function goBackToMovieDetail() {
     updateCheckoutBar();
 }
 
-// 5. Hold the selected seats for 10 minutes (non-refundable policy shown before payment)
+// 5. Hold the selected seats for 20 minutes (non-refundable policy shown before payment)
 // Then create Razorpay order and open checkout
 async function proceedToPayment() {
     if (selectedSeats.length === 0) return;
@@ -733,10 +735,11 @@ async function proceedToPayment() {
         const booking = holdRes.data;
         activeBookingId = booking.bookingId;
         holdExpiresAt = new Date(booking.holdExpiresAt).getTime();
+        myHeldSeats = new Set(booking.seatCodes);
         saveHoldSession();
         startHoldCountdown(booking.holdExpiresAt);
 
-        // Step 2: Create Razorpay order (this extends hold to 20 minutes)
+        // Step 2: Create Razorpay order
         const orderRes = await paymentApiCall('/orders', 'POST', {
             bookingId: activeBookingId
         });
@@ -911,24 +914,26 @@ function connectToSeatStream(showId) {
             
             // Find the seat element and update its status
             const seatElement = document.querySelector(`[data-id="${update.seatCode}"]`);
-            if (seatElement) {
-                const isHeldByMe = update.status === 'HELD' && update.heldByMe === true;
-                const isTaken = update.status === 'BOOKED' || (update.status === 'HELD' && !isHeldByMe);
-                
-                // Update classes
-                seatElement.classList.remove('available', 'held', 'booked');
-                if (isTaken) {
-                    seatElement.classList.add('booked');
-                    seatElement.title = `${update.seatCode} - unavailable`;
-                    seatElement.onclick = null; // Remove click handler
-                } else if (isHeldByMe) {
-                    seatElement.classList.add('held');
-                    seatElement.title = `${update.seatCode} - Held by you (expires in countdown)`;
-                } else {
-                    seatElement.classList.add('available');
-                    seatElement.title = `${update.seatCode} - ₹${update.price}`;
-                    seatElement.onclick = () => toggleSeatSelection(seatElement, update.seatCode);
-                }
+            if (!seatElement) return;
+            
+            // Determine if this seat is held by the current user
+            const heldByMe = update.status === 'HELD' && myHeldSeats.has(update.seatCode);
+            const isTaken = update.status === 'BOOKED' || (update.status === 'HELD' && !heldByMe);
+            
+            // Update classes
+            seatElement.classList.remove('available', 'held', 'booked');
+            if (isTaken) {
+                seatElement.classList.add('booked');
+                seatElement.title = `${update.seatCode} - unavailable`;
+                seatElement.onclick = null;
+            } else if (heldByMe) {
+                seatElement.classList.add('held');
+                seatElement.title = `${update.seatCode} - Held by you (pay within 20 min)`;
+            } else {
+                // Seat became available again (e.g. another user's hold expired)
+                seatElement.classList.add('available');
+                seatElement.title = `${update.seatCode} - ₹${update.price}`;
+                seatElement.onclick = () => toggleSeatSelection(seatElement, update.seatCode);
             }
         } catch (err) {
             console.error('[SSE] Error processing event:', err);

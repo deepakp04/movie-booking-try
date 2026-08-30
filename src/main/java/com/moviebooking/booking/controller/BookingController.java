@@ -24,7 +24,7 @@ public class BookingController {
 
     @PostMapping("/hold")
     public ApiResponse<BookingResponse> holdSeats(@RequestBody HoldSeatsRequest req) {
-        return new ApiResponse<>(true, "Seats held for 10 minutes. Complete payment before the hold expires.",
+        return new ApiResponse<>(true, "Seats held for 20 minutes. Complete payment before the hold expires.",
                 bookingService.holdSeats(req));
     }
 
