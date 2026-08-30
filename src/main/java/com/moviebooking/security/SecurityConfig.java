@@ -37,8 +37,6 @@ public class SecurityConfig {
                     "/admin.html", "/admin.css", "/admin.js",
                     // Theatre Owner Web Assets
                     "/owner.html", "/owner.js",
-                    // Bookings page
-                    "/bookings.html",
                     // Razorpay webhook (called by Razorpay servers, not browser)
                     "/api/payment/webhook"
                 ).permitAll()

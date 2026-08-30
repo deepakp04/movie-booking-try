@@ -285,7 +285,7 @@
 
         // Check authentication on page load
         document.addEventListener('DOMContentLoaded', function() {
-            const token = localStorage.getItem('accessToken');
+            const token = localStorage.getItem('token');
             if (!token) {
                 window.location.href = 'auth.html';
                 return;
@@ -295,7 +295,7 @@
 
         async function loadBookings() {
             try {
-                const token = localStorage.getItem('accessToken');
+                const token = localStorage.getItem('token');
                 const response = await fetch('/api/booking/my-bookings', {
                     method: 'GET',
                     headers: {
@@ -305,7 +305,7 @@
                 });
 
                 if (response.status === 401) {
-                    localStorage.removeItem('accessToken');
+                    localStorage.removeItem('token');
                     localStorage.removeItem('refreshToken');
                     window.location.href = 'auth.html';
                     return;
@@ -432,7 +432,7 @@
             }
 
             try {
-                const token = localStorage.getItem('accessToken');
+                const token = localStorage.getItem('token');
                 const response = await fetch(`/api/booking/${bookingId}/cancel`, {
                     method: 'POST',
                     headers: {

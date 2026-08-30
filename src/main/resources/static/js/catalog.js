@@ -773,7 +773,7 @@ async function proceedToPayment() {
                         showAlert('Payment successful! Your booking is confirmed.', 'success');
                         clearHoldSession();
                         // Redirect to bookings page
-                        setTimeout(() => window.location.href = '/bookings.html', 2000);
+                        setTimeout(() => window.location.href = '/auth.html', 2000);
                     }
                 } catch (err) {
                     showAlert('Payment verification failed. Please contact support.', 'error');
@@ -954,5 +954,5 @@ function disconnectFromSeatStream() {
 
 // Quick access to My Bookings from the catalog page
 function viewMyBookings() {
-    window.location.href = '/bookings.html';
+    window.location.href = '/auth.html';
 }

@@ -553,7 +553,97 @@ function escapeHtml(text) {
 }
 
 async function continuePayment(bookingId) {
-    showAlert('Payment integration coming soon. Your seats are held for 10 minutes.', 'info');
+    const accessToken = localStorage.getItem('accessToken');
+    if (!accessToken) {
+        showAlert('Please log in to continue payment.', 'error');
+        return;
+    }
+
+    try {
+        showAlert('Creating payment order...', 'success');
+
+        // Step 1: Create Razorpay order
+        const orderRes = await fetch('/api/payment/orders', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${accessToken}`
+            },
+            body: JSON.stringify({ bookingId: bookingId })
+        });
+
+        const orderResult = await orderRes.json();
+
+        if (!orderResult.success || !orderResult.data) {
+            showAlert(orderResult.message || 'Failed to create payment order.', 'error');
+            return;
+        }
+
+        const order = orderResult.data;
+
+        // Step 2: Open Razorpay Checkout
+        const options = {
+            key: order.razorpayKeyId,
+            amount: Math.round(parseFloat(order.amount) * 100), // Convert to paise
+            currency: order.currency,
+            name: 'PVR Cinemas',
+            description: 'Ticket Purchase',
+            order_id: order.razorpayOrderId,
+            handler: async function (response) {
+                // Payment successful - verify on server
+                try {
+                    const verifyRes = await fetch('/api/payment/verify', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${accessToken}`
+                        },
+                        body: JSON.stringify({
+                            razorpayOrderId: response.razorpay_order_id,
+                            razorpayPaymentId: response.razorpay_payment_id,
+                            razorpaySignature: response.razorpay_signature
+                        })
+                    });
+
+                    const verifyResult = await verifyRes.json();
+
+                    if (verifyResult.success) {
+                        showAlert('Payment successful! Your booking is confirmed.', 'success');
+                        // Refresh bookings list
+                        setTimeout(() => loadMyBookings(), 1500);
+                    } else {
+                        showAlert(verifyResult.message || 'Payment verification failed. Please contact support.', 'error');
+                    }
+                } catch (err) {
+                    console.error('[VERIFY PAYMENT]', err);
+                    showAlert('Payment verification failed. Please contact support.', 'error');
+                }
+            },
+            prefill: {
+                name: '',
+                email: localStorage.getItem('userEmail') || '',
+                contact: ''
+            },
+            theme: {
+                color: '#6c5ce7'
+            },
+            modal: {
+                ondismiss: function () {
+                    showAlert('Payment cancelled. Your seats will be held for a limited time.', 'error');
+                }
+            }
+        };
+
+        const rzp = new Razorpay(options);
+        rzp.on('payment.failed', function (response) {
+            showAlert('Payment failed: ' + (response.error.description || 'Unknown error'), 'error');
+        });
+        rzp.open();
+
+    } catch (err) {
+        console.error('[CONTINUE PAYMENT]', err);
+        showAlert('Failed to initiate payment. Please try again.', 'error');
+    }
 }
 
 async function cancelBooking(bookingId) {
