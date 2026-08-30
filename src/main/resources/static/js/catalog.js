@@ -712,9 +712,16 @@ async function proceedToPayment() {
 
     const confirmed = confirm(
         `You're about to hold ${selectedSeats.length} seat(s).\n\n` +
-        `Tickets are 100% NON-REFUNDABLE once payment is completed.\n\nContinue?`
+        `Tickets are 100% NON-REFUNDABLE once payment is completed.\n\nContinue to payment?`
     );
     if (!confirmed) return;
+
+    // Disable the button so user can't double-click
+    const payBtn = document.getElementById('payNowBtn');
+    if (payBtn) {
+        payBtn.disabled = true;
+        payBtn.textContent = 'Opening payment...';
+    }
 
     try {
         // Step 1: Hold the seats
@@ -726,20 +733,8 @@ async function proceedToPayment() {
         const booking = holdRes.data;
         activeBookingId = booking.bookingId;
         holdExpiresAt = new Date(booking.holdExpiresAt).getTime();
-
-        // Save hold session to localStorage for persistence across refreshes
         saveHoldSession();
-
-        showAlert(
-            `Seats held: ${booking.seatCodes.join(', ')} | Total ₹${booking.totalAmount} | ` +
-            `Transaction ref: ${booking.transactionId}.`,
-            'success'
-        );
-
         startHoldCountdown(booking.holdExpiresAt);
-        await fetchAndRenderSeats(activeShowContext.showId);
-        selectedSeats = [];
-        updateCheckoutBar();
 
         // Step 2: Create Razorpay order (this extends hold to 20 minutes)
         const orderRes = await paymentApiCall('/orders', 'POST', {
@@ -747,21 +742,18 @@ async function proceedToPayment() {
         });
 
         const order = orderRes.data;
-        
-        // Update countdown to reflect extended hold
         holdExpiresAt = new Date(order.expiresAt).getTime();
         saveHoldSession();
 
-        // Step 3: Open Razorpay Checkout
+        // Step 3: Open Razorpay Checkout directly
         const options = {
             key: order.razorpayKeyId,
-            amount: Math.round(parseFloat(order.amount) * 100), // Convert to paise
+            amount: Math.round(parseFloat(order.amount) * 100),
             currency: order.currency,
-            name: 'Movie Booking System',
+            name: 'PVR Cinemas',
             description: 'Ticket Purchase',
             order_id: order.razorpayOrderId,
             handler: async function(response) {
-                // Payment successful - verify on server
                 try {
                     const verifyRes = await paymentApiCall('/verify', 'POST', {
                         razorpayOrderId: response.razorpay_order_id,
@@ -770,9 +762,9 @@ async function proceedToPayment() {
                     });
 
                     if (verifyRes.success) {
-                        showAlert('Payment successful! Your booking is confirmed.', 'success');
                         clearHoldSession();
-                        // Redirect to bookings page
+                        disconnectFromSeatStream();
+                        showAlert('Payment successful! Your booking is confirmed.', 'success');
                         setTimeout(() => window.location.href = '/auth.html', 2000);
                     }
                 } catch (err) {
@@ -789,20 +781,33 @@ async function proceedToPayment() {
             },
             modal: {
                 ondismiss: function() {
-                    showAlert('Payment cancelled. Your seats will be released in 20 minutes.', 'error');
+                    // User closed the payment window — re-render seats to show held state
+                    showAlert('Payment cancelled. Your seats are held for 20 minutes. You can pay from My Bookings.', 'error');
+                    fetchAndRenderSeats(activeShowContext.showId);
+                    selectedSeats = [];
+                    updateCheckoutBar();
                 }
             }
         };
 
         const rzp = new Razorpay(options);
+        rzp.on('payment.failed', function(response) {
+            showAlert('Payment failed: ' + (response.error.description || 'Please try again.'), 'error');
+        });
         rzp.open();
 
     } catch (err) {
-        // Error already shown by bookingApiCall; refresh seat map since
-        // someone may have grabbed a seat in the meantime.
+        // Refresh seat map on error so user sees current availability
         await fetchAndRenderSeats(activeShowContext.showId);
         selectedSeats = [];
         updateCheckoutBar();
+    } finally {
+        // Re-enable the button in case we didn't redirect
+        if (payBtn) {
+            payBtn.disabled = false;
+            payBtn.textContent = 'Continue';
+            updateCheckoutBar();
+        }
     }
 }
 
