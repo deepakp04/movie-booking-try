@@ -1,0 +1,671 @@
+:root {
+    --bg-color: #0d0f12;
+    --card-bg: #16191e;
+    --border-color: #2a2e37;
+    --primary-gold: #e5b80b;
+    --primary-hover: #c9a007;
+    --text-main: #f0f2f5;
+    --text-muted: #8c93a0;
+    --danger-red: #e53935;
+    --success-green: #2e7d32;
+    --font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    background-color: var(--bg-color);
+    color: var(--text-main);
+    font-family: var(--font-family);
+    min-height: 100vh;
+}
+
+/* Navbar */
+.navbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px 32px;
+    background-color: var(--card-bg);
+    border-bottom: 1px solid var(--border-color);
+    position: sticky;
+    top: 0;
+    z-index: 100;
+}
+
+.nav-brand {
+    font-size: 1.5rem;
+    letter-spacing: 2px;
+    font-weight: 700;
+    color: #ffffff;
+    cursor: pointer;
+}
+
+.nav-brand span {
+    color: var(--primary-gold);
+}
+
+.nav-controls {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+
+.city-selector {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background-color: #0b0c0e;
+    padding: 8px 12px;
+    border-radius: 4px;
+    border: 1px solid var(--border-color);
+}
+
+.city-selector select {
+    background: transparent;
+    color: #ffffff;
+    border: none;
+    outline: none;
+    font-size: 0.9rem;
+    cursor: pointer;
+}
+
+.city-selector select option {
+    background-color: var(--card-bg);
+    color: #ffffff;
+}
+
+/* Layout */
+.main-container {
+    max-width: 1200px;
+    margin: 32px auto;
+    padding: 0 20px;
+}
+
+.section-header {
+    margin-bottom: 24px;
+}
+
+.section-header h2 {
+    font-size: 1.5rem;
+    font-weight: 600;
+}
+
+.gold-text {
+    color: var(--primary-gold);
+}
+
+/* Movie Grid */
+.grid-container {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 20px;
+}
+
+.movie-card {
+    background-color: var(--card-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    overflow: hidden;
+    cursor: pointer;
+    transition: transform 0.2s, border-color 0.2s;
+}
+
+.movie-card:hover {
+    transform: translateY(-4px);
+    border-color: var(--primary-gold);
+}
+
+.movie-card img {
+    width: 100%;
+    height: 310px;
+    object-fit: cover;
+}
+
+.movie-card-body {
+    padding: 16px;
+}
+
+.movie-card-title {
+    font-size: 1.05rem;
+    font-weight: 600;
+    margin-bottom: 8px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* Badges */
+.badge {
+    padding: 3px 8px;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
+.badge-gold {
+    background-color: var(--primary-gold);
+    color: #000000;
+}
+
+.badge-pill {
+    background-color: #0b0c0e;
+    border: 1px solid var(--border-color);
+    color: var(--text-muted);
+}
+
+.tag-group {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 8px;
+}
+
+/* Buttons */
+.btn {
+    width: 100%;
+    padding: 12px;
+    border: none;
+    border-radius: 4px;
+    font-size: 0.95rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+.btn-sm {
+    padding: 8px 16px;
+    width: auto;
+    font-size: 0.85rem;
+}
+
+.btn-primary {
+    background-color: var(--primary-gold);
+    color: #000000;
+}
+
+.btn-primary:hover {
+    background-color: var(--primary-hover);
+}
+
+.btn-secondary {
+    background-color: #2a2e37;
+    color: #ffffff;
+}
+
+.btn-secondary:hover {
+    background-color: #383e4a;
+}
+
+.btn-link {
+    background: none;
+    border: none;
+    color: var(--primary-gold);
+    cursor: pointer;
+    font-size: 0.9rem;
+    text-decoration: underline;
+}
+
+.back-link {
+    display: inline-block;
+    margin-bottom: 16px;
+}
+
+/* Movie Details */
+.movie-banner-card {
+    background-color: var(--card-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    overflow: hidden;
+    position: relative;
+    background-size: cover;
+    background-position: center;
+}
+
+.banner-overlay {
+    background: linear-gradient(90deg, rgba(13, 15, 18, 0.95) 35%, rgba(13, 15, 18, 0.75) 100%);
+    padding: 32px;
+}
+
+.movie-header-content {
+    display: flex;
+    gap: 28px;
+}
+
+.detail-poster {
+    width: 200px;
+    border-radius: 6px;
+    border: 1px solid var(--border-color);
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
+}
+
+.detail-info { flex: 1; }
+
+.detail-info h1 {
+    font-size: 2rem;
+    margin-bottom: 12px;
+}
+
+.meta-tags {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 12px;
+    font-size: 0.9rem;
+    color: var(--text-muted);
+}
+
+.description {
+    margin: 16px 0;
+    line-height: 1.5;
+    color: var(--text-main);
+    font-size: 0.95rem;
+}
+
+.cast-info {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    margin-bottom: 20px;
+}
+
+.caption-notice {
+    font-size: 0.85rem;
+    color: var(--success-green);
+    margin-top: 6px;
+}
+
+/* Showtimes Section */
+.showtimes-card {
+    margin-top: 32px;
+    background-color: var(--card-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 28px;
+}
+
+.showtimes-card h2 {
+    font-size: 1.35rem;
+    margin-bottom: 16px;
+}
+
+.date-bar {
+    display: flex;
+    gap: 12px;
+    margin: 20px 0;
+    overflow-x: auto;
+    padding-bottom: 8px;
+}
+
+.date-chip {
+    padding: 10px 16px;
+    background-color: #0b0c0e;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    text-align: center;
+    cursor: pointer;
+    min-width: 85px;
+    transition: border-color 0.2s, background-color 0.2s;
+}
+
+.date-chip.active {
+    border-color: var(--primary-gold);
+    background-color: rgba(229, 184, 11, 0.1);
+}
+
+.date-chip .day { font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase; display: block; }
+.date-chip .date-num { font-size: 1rem; font-weight: 700; color: #ffffff; }
+
+.theatre-card {
+    border-bottom: 1px solid var(--border-color);
+    padding: 20px 0;
+}
+
+.theatre-card:last-child { border-bottom: none; }
+
+.theatre-name { font-size: 1.1rem; font-weight: 600; margin-bottom: 4px; }
+.theatre-address { font-size: 0.85rem; color: var(--text-muted); margin-bottom: 16px; }
+
+.showtime-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+}
+
+.show-chip {
+    background-color: #0b0c0e;
+    border: 1px solid var(--border-color);
+    padding: 10px 16px;
+    border-radius: 4px;
+    cursor: pointer;
+    text-align: center;
+    transition: border-color 0.2s;
+}
+
+.show-chip:hover {
+    border-color: var(--primary-gold);
+}
+
+.show-chip .time { font-size: 0.95rem; font-weight: 600; color: var(--primary-gold); }
+.show-chip .sub-info { font-size: 0.75rem; color: var(--text-muted); margin-top: 2px; }
+
+/* Global Alerts */
+.alert {
+    padding: 12px;
+    border-radius: 4px;
+    font-size: 0.85rem;
+    margin-bottom: 20px;
+}
+
+.alert-error {
+    background-color: rgba(229, 57, 53, 0.15);
+    border: 1px solid var(--danger-red);
+    color: #ff8a80;
+}
+
+.alert-success {
+    background-color: rgba(46, 125, 50, 0.15);
+    border: 1px solid var(--success-green);
+    color: #b9f6ca;
+}
+
+.hidden { display: none !important; }
+
+/* Auth Gate Modal */
+.modal {
+    position: fixed;
+    top: 0; left: 0; width: 100%; height: 100%;
+    background: rgba(0,0,0,0.8);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+}
+
+.modal-card {
+    background-color: var(--card-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 28px;
+    max-width: 420px;
+    width: 90%;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
+}
+
+.modal-card h2 {
+    font-size: 1.35rem;
+    margin-bottom: 12px;
+}
+
+.modal-actions {
+    display: flex;
+    gap: 12px;
+}
+
+/* =========================================
+   VIEW 4: SEAT SELECTION & CHECKOUT
+   ========================================= */
+
+.booking-header {
+    text-align: center;
+    margin-bottom: 30px;
+}
+
+.seat-legend {
+    display: flex;
+    justify-content: center;
+    gap: 24px;
+    margin-bottom: 40px;
+    font-size: 0.9rem;
+    color: #a1a1aa;
+}
+
+.legend-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.seat-map-container {
+    background: #121212;
+    border: 1px solid #27272a;
+    border-radius: 12px;
+    padding: 40px 20px;
+    overflow-x: auto;
+    margin-bottom: 80px; /* Space for checkout bar */
+}
+
+/* The Curved Screen */
+.screen-indicator {
+    text-align: center;
+    margin-bottom: 50px;
+    color: #52525b;
+    font-size: 0.8rem;
+    letter-spacing: 2px;
+}
+
+.screen-curve {
+    height: 30px;
+    width: 80%;
+    max-width: 600px;
+    margin: 0 auto 10px auto;
+    border-top: 4px solid #d4af37; /* PVR Gold */
+    border-radius: 50% 50% 0 0 / 100% 100% 0 0;
+    box-shadow: 0 -15px 30px rgba(212, 175, 55, 0.15);
+}
+
+/* Seat Grid Mechanics */
+.seat-grid {
+    display: grid;
+    gap: 10px;
+    justify-content: center;
+    margin: 0 auto;
+}
+
+.seat {
+    width: 32px;
+    height: 32px;
+    border-radius: 6px 6px 4px 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.65rem;
+    font-weight: bold;
+    cursor: pointer;
+    transition: all 0.2s;
+    user-select: none;
+}
+
+/* States */
+.seat.available {
+    background: #27272a;
+    border: 1px solid #3f3f46;
+    color: #a1a1aa;
+}
+.seat.available:hover {
+    border-color: #d4af37;
+    color: #d4af37;
+}
+
+.seat.selected {
+    background: #d4af37;
+    color: #000;
+    border: 1px solid #d4af37;
+    box-shadow: 0 0 10px rgba(212, 175, 55, 0.4);
+}
+
+.seat.booked {
+    background: #18181b;
+    color: #3f3f46;
+    border: 1px solid #27272a;
+    cursor: not-allowed;
+    text-decoration: line-through;
+}
+
+/* Held by current user - orange/gold with lock indicator */
+.seat.held {
+    background: #d97706;
+    color: #000;
+    border: 1px solid #d97706;
+    box-shadow: 0 0 10px rgba(217, 119, 6, 0.4);
+    cursor: not-allowed;
+    position: relative;
+}
+
+.seat.held::after {
+    content: '🔒';
+    position: absolute;
+    font-size: 0.5rem;
+    top: -2px;
+    right: -2px;
+}
+
+/* This makes the pathways render as empty space */
+.seat.pathway {
+    background: transparent;
+    border: none;
+    cursor: default;
+    pointer-events: none;
+}
+
+/* Sticky Checkout Bar */
+.checkout-bar {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    background: #18181b;
+    border-top: 1px solid #27272a;
+    padding: 16px 5%;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    z-index: 100;
+    box-shadow: 0 -5px 20px rgba(0,0,0,0.5);
+}
+
+.checkout-info span {
+    font-size: 0.9rem;
+    color: #a1a1aa;
+}
+
+.checkout-info h3 {
+    color: #d4af37;
+    margin: 4px 0 0 0;
+    font-size: 1.5rem;
+}
+
+/* ===================================================================
+   Phase 4/5 additions: tiered seats, pathways, availability signalling
+   =================================================================== */
+
+.confirmed-note {
+    color: var(--text-muted, #8a8a8a);
+    font-size: 0.8rem;
+    margin: 0 0 10px 0;
+    font-style: italic;
+}
+
+/* Dates with no scheduled shows stay visible but read as unavailable, so the
+   user can see how far ahead scheduling has been confirmed. */
+.date-chip.no-shows {
+    opacity: 0.35;
+    cursor: not-allowed;
+    border-style: dashed;
+}
+
+/* Availability bands on showtime chips */
+.show-chip.plenty      { border-color: #2e7d4f; }
+.show-chip.filling     { border-color: #b98a1c; }
+.show-chip.almost-full { border-color: #c0562a; }
+
+.show-chip.sold-out {
+    opacity: 0.4;
+    cursor: not-allowed;
+    text-decoration: line-through;
+    border-color: #555;
+}
+.show-chip.sold-out:hover::after {
+    content: "Tickets sold out";
+    position: absolute;
+    bottom: -22px;
+    left: 0;
+    white-space: nowrap;
+    font-size: 0.7rem;
+    color: #d98b6a;
+    text-decoration: none;
+}
+.show-chip { position: relative; }
+
+/* Seat grid rows, so pathways keep their real column positions */
+.seat-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 6px;
+    justify-content: center;
+}
+
+.seat-row .row-label {
+    width: 18px;
+    font-size: 0.7rem;
+    font-weight: 700;
+    color: var(--primary-gold, #c9a227);
+    text-align: right;
+    flex-shrink: 0;
+}
+
+/* A pathway occupies space but is not interactive or visible as a seat */
+.seat.pathway {
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    cursor: default;
+    pointer-events: none;
+}
+
+.tier-legend {
+    flex-wrap: wrap;
+    gap: 14px;
+    margin-top: 4px;
+}
+
+.seat-count-hint {
+    text-align: center;
+    color: var(--primary-gold, #c9a227);
+    font-size: 0.85rem;
+    margin: 6px 0 0 0;
+}
+
+/* Seat quantity picker */
+.seat-count-grid {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 8px;
+}
+
+.seat-count-btn {
+    padding: 12px 0;
+    font-size: 1rem;
+    font-weight: 700;
+    border-radius: 6px;
+    border: 1px solid var(--border-color, #2a2a2a);
+    background: #14161a;
+    color: #e8e8e8;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.seat-count-btn:hover {
+    background: var(--primary-gold, #c9a227);
+    color: #111;
+    border-color: var(--primary-gold, #c9a227);
+}
+
+#payNowBtn:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+}

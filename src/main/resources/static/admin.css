@@ -1,0 +1,466 @@
+:root {
+    --bg-color: #0d0f12;
+    --card-bg: #16191e;
+    --border-color: #2a2e37;
+    --primary-gold: #e5b80b;
+    --primary-hover: #c9a007;
+    --text-main: #f0f2f5;
+    --text-muted: #8c93a0;
+    --danger-red: #e53935;
+    --success-green: #2e7d32;
+    --font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    background-color: var(--bg-color);
+    color: var(--text-main);
+    font-family: var(--font-family);
+    min-height: 100vh;
+}
+
+/* Navbar */
+.admin-navbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px 32px;
+    background-color: var(--card-bg);
+    border-bottom: 1px solid var(--border-color);
+}
+
+.nav-brand {
+    font-size: 1.35rem;
+    letter-spacing: 2px;
+    font-weight: 700;
+}
+
+.nav-brand span {
+    color: var(--primary-gold);
+}
+
+.nav-user {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+
+.user-badge {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+}
+
+/* Layout */
+.admin-container {
+    display: flex;
+    min-height: calc(100vh - 65px);
+}
+
+.sidebar {
+    width: 240px;
+    background-color: #0b0c0e;
+    border-right: 1px solid var(--border-color);
+    padding: 20px 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.nav-tab {
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    padding: 12px 16px;
+    text-align: left;
+    font-size: 0.9rem;
+    font-weight: 600;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background 0.2s, color 0.2s;
+}
+
+.nav-tab:hover {
+    background-color: var(--card-bg);
+    color: #ffffff;
+}
+
+.nav-tab.active {
+    background-color: rgba(229, 184, 11, 0.15);
+    color: var(--primary-gold);
+    border-left: 3px solid var(--primary-gold);
+}
+
+.content-area {
+    flex: 1;
+    padding: 32px;
+    overflow-y: auto;
+}
+
+.section-title {
+    margin-bottom: 24px;
+}
+
+.section-title h2 {
+    font-size: 1.5rem;
+}
+
+.subtitle {
+    color: var(--text-muted);
+    font-size: 0.85rem;
+}
+
+/* Grid & Cards */
+.grid-layout {
+    display: grid;
+    grid-template-columns: 380px 1fr;
+    gap: 24px;
+}
+
+.admin-card {
+    background-color: var(--card-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 24px;
+}
+
+.admin-card h3 {
+    font-size: 1.1rem;
+    margin-bottom: 16px;
+    color: #ffffff;
+}
+
+/* Forms */
+.form-group {
+    margin-bottom: 16px;
+}
+
+.form-row {
+    display: flex;
+    gap: 12px;
+}
+
+.form-row .form-group { flex: 1; }
+
+.form-group label {
+    display: block;
+    font-size: 0.78rem;
+    color: var(--text-muted);
+    margin-bottom: 6px;
+    text-transform: uppercase;
+}
+
+.form-group input,
+.form-group select,
+.form-group textarea {
+    width: 100%;
+    padding: 10px 12px;
+    background-color: #0b0c0e;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    color: #ffffff;
+    font-size: 0.9rem;
+    outline: none;
+}
+
+.form-group input:focus,
+.form-group select:focus,
+.form-group textarea:focus {
+    border-color: var(--primary-gold);
+}
+
+/* Data Tables */
+.table-wrapper {
+    overflow-x: auto;
+}
+
+.data-table {
+    width: 100%;
+    border-collapse: collapse;
+    text-align: left;
+    font-size: 0.85rem;
+}
+
+.data-table th,
+.data-table td {
+    padding: 12px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.data-table th {
+    color: var(--text-muted);
+    text-transform: uppercase;
+    font-size: 0.75rem;
+}
+
+.data-table img {
+    width: 35px;
+    height: 50px;
+    object-fit: cover;
+    border-radius: 3px;
+}
+
+/* Buttons */
+.btn {
+    width: 100%;
+    padding: 10px;
+    border: none;
+    border-radius: 4px;
+    font-size: 0.9rem;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.btn-sm {
+    padding: 6px 12px;
+    width: auto;
+    font-size: 0.8rem;
+}
+
+.btn-primary { background-color: var(--primary-gold); color: #000; }
+.btn-primary:hover { background-color: var(--primary-hover); }
+
+.btn-secondary { background-color: #2a2e37; color: #fff; }
+.btn-secondary:hover { background-color: #383e4a; }
+
+.btn-danger-sm {
+    background-color: rgba(229, 57, 53, 0.2);
+    border: 1px solid var(--danger-red);
+    color: #ff8a80;
+    padding: 4px 8px;
+    border-radius: 3px;
+    cursor: pointer;
+}
+
+.divider {
+    border: 0;
+    height: 1px;
+    background: var(--border-color);
+    margin: 20px 0;
+}
+
+/* Alerts */
+.alert {
+    padding: 12px;
+    border-radius: 4px;
+    font-size: 0.85rem;
+    margin-bottom: 20px;
+}
+.alert-error { background-color: rgba(229, 57, 53, 0.15); border: 1px solid var(--danger-red); color: #ff8a80; }
+.alert-success { background-color: rgba(46, 125, 50, 0.15); border: 1px solid var(--success-green); color: #b9f6ca; }
+
+.hidden { display: none !important; }
+/* ==========================================
+   SEAT LAYOUT & PATHWAY DESIGNER MODAL
+   ========================================== */
+
+.modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: rgba(0, 0, 0, 0.85);
+  backdrop-filter: blur(4px);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 9999;
+}
+
+.modal.hidden {
+  display: none !important;
+}
+
+.modal-content {
+  background: #18181b;
+  border: 1px solid #27272a;
+  border-radius: 12px;
+  width: 90%;
+  max-width: 680px;
+  padding: 24px;
+  color: #f4f4f5;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5);
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid #27272a;
+  padding-bottom: 12px;
+  margin-bottom: 16px;
+}
+
+.modal-header h3 {
+  margin: 0;
+  font-size: 1.25rem;
+}
+
+.close-btn {
+  background: none;
+  border: none;
+  color: #a1a1aa;
+  font-size: 1.75rem;
+  cursor: pointer;
+  line-height: 1;
+}
+
+.close-btn:hover {
+  color: #ffffff;
+}
+
+.designer-controls {
+  display: flex;
+  gap: 16px;
+  margin: 16px 0;
+  align-items: center;
+  background: #09090b;
+  padding: 12px 16px;
+  border-radius: 8px;
+  border: 1px solid #27272a;
+}
+
+.designer-controls label {
+  font-size: 0.875rem;
+  color: #a1a1aa;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.designer-controls input {
+  width: 64px;
+  padding: 6px 10px;
+  background: #18181b;
+  border: 1px solid #3f3f46;
+  border-radius: 6px;
+  color: #fff;
+  font-size: 0.9rem;
+}
+
+/* Interactive Seat Grid */
+.grid-canvas {
+  display: grid;
+  gap: 8px;
+  margin-top: 16px;
+  max-height: 380px;
+  overflow: auto;
+  padding: 16px;
+  background: #09090b;
+  border-radius: 8px;
+  border: 1px solid #27272a;
+  justify-content: center;
+}
+
+.seat-cell {
+  width: 34px;
+  height: 34px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  user-select: none;
+  transition: all 0.15s ease-in-out;
+}
+
+/* Regular Available Seat */
+.seat-cell.active {
+  background-color: #166534;
+  color: #dcfce7;
+  border: 1px solid #22c55e;
+}
+
+.seat-cell.active:hover {
+  background-color: #15803d;
+}
+
+/* Pathway / Aisle Gap */
+.seat-cell.pathway {
+  background-color: transparent;
+  border: 1px dashed #3f3f46;
+  color: #52525b;
+}
+
+.seat-cell.pathway:hover {
+  border-color: #71717a;
+}
+
+.modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 20px;
+  padding-top: 12px;
+  border-top: 1px solid #27272a;
+}
+/* ===================================================================
+   Maintenance tab + per-show tier pricing.
+   Aligned with the existing .admin-card / .form-group conventions so the
+   boxes read consistently with the rest of the portal.
+   =================================================================== */
+
+/* Colour picker needs explicit sizing or it renders at browser default and
+   breaks the height rhythm of the surrounding form row. */
+.form-group input[type="color"] {
+  width: 100%;
+  height: 40px;
+  padding: 3px;
+  background: #18181b;
+  border: 1px solid #3f3f46;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+/* Tier price rows sit inside a .form-group and must not inherit the wide
+   two-column gap that .form-row uses for full-width fields. */
+#showTierPriceRows .form-row {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 8px;
+  align-items: center;
+}
+
+#showTierPriceRows input.tier-price-input {
+  flex: 1;
+  min-width: 0;
+  padding: 8px 10px;
+  background: #18181b;
+  border: 1px solid #3f3f46;
+  border-radius: 6px;
+  color: #fff;
+  font-size: 0.9rem;
+}
+
+#showPrice:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* Palette swatches in the layout designer */
+#mtPalette button {
+  padding: 6px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.8rem;
+  font-weight: 600;
+  border: 2px solid transparent;
+  transition: border-color 0.15s ease-in-out;
+}
+
+/* The designer grid is built as flex rows, so the parent must not impose a
+   grid template on it. */
+.grid-canvas > #mtGrid {
+  display: inline-block;
+}
+
+.admin-card .divider {
+  margin: 18px 0;
+}

@@ -1,0 +1,427 @@
+You are working directly on my GitHub repository/codebase.
+
+## IMPORTANT — HOW I WANT YOU TO WORK
+
+Do NOT immediately start writing code.
+
+I want you to first understand the existing codebase, identify the actual problem, explain it to me, and only then propose changes.
+
+### 1. READ THE CODEBASE FIRST
+
+Start by reading the repository thoroughly enough to understand the relevant architecture.
+
+I have also provided a `Movie Booking System — Handoff Document`. Read the ENTIRE document before making any changes.
+
+The handoff document describes important conventions, invariants, previously fixed bugs, and the intended development sequence. Treat those as important project constraints.
+
+However:
+
+**Do not blindly assume the handoff document is correct if the actual repository code says otherwise.**
+
+Always verify important claims against the actual source code.
+
+For the current work, especially inspect:
+
+Backend:
+
+* `application.properties`
+* `BaseEntity`
+* `BookingService`
+* `SeatConfigService`
+* `ShowPricingService`
+* relevant Booking controllers
+* relevant entities/repositories
+* existing security/authentication configuration
+* existing exception handling
+* existing scheduler/maintenance code
+
+Frontend:
+
+The frontend is inside:
+
+`src/main/resources/static`
+
+This is a plain HTML/CSS/JavaScript frontend.
+
+Inspect the relevant:
+
+* `.html`
+* `.css`
+* `.js`
+
+Do NOT assume the frontend is somewhere else.
+
+Understand how the existing customer booking flow works before changing it.
+
+---
+
+## 2. FIRST: TELL ME WHAT IS CURRENTLY WRONG
+
+Before writing or modifying ANY code:
+
+1. Explain what the current implementation does.
+2. Explain where the current implementation stops.
+3. Identify the missing functionality for the next phase.
+4. Identify any bugs, architectural problems, or risks you discover.
+5. Explain which existing code/classes are involved.
+6. Explain what should be changed and why.
+
+Do not immediately fix things just because you notice them.
+
+I want to discuss the problem first.
+
+If something is unclear from the repository, say:
+
+> "I cannot confirm this from the current codebase."
+
+Do NOT invent implementation details.
+
+---
+
+## 3. ASK ME BEFORE NON-TRIVIAL CHANGES
+
+For anything involving an architectural or business decision, STOP and ask me.
+
+For example, payment has an important unresolved decision:
+
+### What happens if the 10-minute seat hold expires while the customer is on Razorpay Checkout?
+
+Possible approaches include:
+
+* extend the hold when the Razorpay order is created
+* revalidate the hold before opening Checkout
+* another approach you can justify
+
+Explain the tradeoffs and ask me which behavior I want.
+
+Do not silently choose a business rule when the decision belongs to me.
+
+---
+
+## 4. DEVELOPMENT ORDER
+
+Work on ONE module at a time.
+
+Do not simultaneously modify payment, WebFlux, notifications, analytics, and hardening.
+
+For each module:
+
+1. Understand
+2. Explain the current state/problem
+3. Propose the solution
+4. Wait for my approval
+5. Implement
+6. Verify
+7. Show me exactly what changed
+8. Only then move to the next module
+
+Every change must be additive and must not break existing functionality.
+
+---
+
+# CURRENT PROJECT ROADMAP
+
+These are the upcoming phases.
+
+## Phase 2 — Payment Integration + WebFlux Real-Time Features
+
+### Payment — Razorpay
+
+Implement:
+
+* Server-side Razorpay order creation
+* Signature verification on the server
+* Razorpay webhook handler
+* Idempotent payment confirmation
+* Payment/transaction visibility where appropriate
+* Proper handling of the existing booking hold
+* Existing `Booking.transactionId` should be respected
+
+Important:
+
+The browser saying "payment succeeded" is NOT sufficient.
+
+The backend must verify the Razorpay signature.
+
+The webhook should be treated as authoritative.
+
+The callback and webhook must converge into one safe/idempotent confirmation flow.
+
+Do not create duplicate confirmations if both arrive.
+
+Before implementing payment, ask me about the unresolved 10-minute hold-expiry behavior.
+
+---
+
+## Phase 2 — WebFlux Real-Time Seat Updates
+
+After the payment work is properly designed/implemented:
+
+Add WebFlux support.
+
+Expected functionality:
+
+`GET /api/stream/shows/{showId}/seats`
+
+This endpoint should allow customers viewing a show's seat map to receive live seat-status updates.
+
+Example:
+
+* User A holds seats A1 and A2.
+* User B is currently viewing the same show's seat map.
+* User B should see those seats change to HELD/red without refreshing the page.
+
+Expected architecture:
+
+Existing booking/seat-hold events
+→ event bridge
+→ WebFlux/SSE
+→ connected customers viewing that show
+
+Before implementing this, inspect the existing `BookingService` hold logic and determine the safest way to bridge those events into SSE.
+
+Do not invent an event architecture before examining the current code.
+
+---
+
+# FUTURE PHASES — DO NOT IMPLEMENT YET
+
+## Phase 3 — Notifications
+
+Eventually:
+
+* Booking confirmation email
+* PDF ticket
+* Payment receipt
+* Reactive/non-blocking email dispatcher
+* `Sinks.Many<EmailTask>` email queue
+* Outbox pattern so emails survive application restarts
+
+The existing Gmail SMTP implementation is currently synchronous in several places.
+
+Do not change this now unless it is required for the current approved task.
+
+---
+
+## Phase 4 — Analytics
+
+Eventually:
+
+* Revenue
+* Tickets sold
+* Occupancy
+* Per-movie breakdown
+* Per-show breakdown
+* Date range filters
+* Movie
+* Theatre
+* Screen
+* City
+* Format
+* Language
+
+IMPORTANT:
+
+Revenue MUST use the immutable price snapshot in `show_seats.price`.
+
+Do NOT calculate historical revenue by joining back to `seat_tiers` or `show_tier_prices`.
+
+This is a critical project invariant.
+
+Analytics should use database aggregation rather than loading everything into Java.
+
+Admin and theatre-owner access must respect the existing theatre-scoping architecture.
+
+Do not implement this yet.
+
+---
+
+## Phase 5 — Hardening
+
+Eventually:
+
+* Replace unsafe `innerHTML +=` usage with `createElement` / `textContent`
+* Replace `prompt()` dialogs with proper forms
+* Adopt Flyway
+* Set Hibernate `ddl-auto=validate`
+* Rotate/externalize secrets
+* Standardize error responses
+* Add tests, especially concurrent booking scenarios
+* Remove/secure debug endpoints
+
+Do not implement this yet.
+
+---
+
+# EXISTING PROJECT RULES YOU MUST PRESERVE
+
+These are NOT optional.
+
+### Soft deletes
+
+Entities use soft deletes.
+
+Do not casually introduce:
+
+* `findAll()`
+* `findById()`
+* `deleteById()`
+* `existsById()`
+
+where the project requires `isDeleted = false`.
+
+Follow the existing repository conventions.
+
+### Owner security
+
+A theatre owner's theatre must NEVER come from a client-provided theatre ID.
+
+The backend must resolve the owner's theatre from the authenticated identity/JWT.
+
+Preserve the existing `restrictToTheatreId` pattern.
+
+### DTOs
+
+`spring.jpa.open-in-view=false`.
+
+Do not return lazy JPA entities directly from controllers.
+
+Use DTOs mapped inside transactional service methods.
+
+### Seat pricing
+
+`show_seats.price` and `show_seats.tier_name` are historical snapshots.
+
+Do not modify the meaning of those fields.
+
+### Booking
+
+Existing rules include:
+
+* maximum 10 seats per booking
+* 10-minute hold
+* all-or-nothing seat holding
+* pessimistic locking
+* cannot hold seats for a show that already started
+* booking total is based on individual seat prices
+
+Do not break these rules.
+
+### Frontend
+
+This is vanilla HTML/CSS/JS.
+
+No React.
+No Angular.
+No npm/build system unless we explicitly decide otherwise.
+
+Before creating a new CSS class, inspect the existing CSS and reuse the project's actual classes.
+
+Do not invent `.card`, `.card-title`, etc. without checking the existing stylesheet.
+
+For dynamically generated frontend content, prefer:
+
+`createElement()`
+`textContent`
+
+rather than unsafe `innerHTML +=`.
+
+---
+
+# VERY IMPORTANT — ACTUAL REPOSITORY CHANGES
+
+This is especially important because previous AI sessions had a problem where changes appeared to be made in the AI's local workspace but were not actually reflected in the GitHub PR.
+
+When you implement an approved change:
+
+**Modify the actual repository files that are connected to this GitHub workspace/PR.**
+
+Do NOT merely show me code snippets.
+
+Do NOT create a separate imaginary/local version of the project.
+
+After making changes, explicitly verify:
+
+1. Which repository files were modified.
+2. That the modifications exist in the actual working repository.
+3. What the resulting diff contains.
+4. That the changes are ready to be published to the PR.
+
+If the environment prevents you from modifying or publishing the repository, tell me immediately.
+
+Do NOT pretend that the PR was changed if you only changed a temporary/local copy.
+
+At the end of every implementation step, report:
+
+* Files changed
+* What changed in each file
+* Verification performed
+* Any remaining issue
+* Whether the changes are actually present in the repository/PR workspace
+
+---
+
+# VERIFICATION
+
+Before saying an implementation is complete, verify it as much as the environment allows.
+
+For JavaScript:
+
+`node --check <file>`
+
+For Java:
+
+Mechanically check brace/parenthesis balance where possible.
+
+Also check:
+
+* HTML event handlers have matching JS functions
+* endpoint paths match between frontend and backend
+* request/response DTOs match
+* enum values match backend values
+* imports are correct
+* repository methods match service usage
+* transactional boundaries make sense
+* security annotations are correct
+* no existing functionality was accidentally removed
+
+If you cannot compile or run the application because the environment does not provide Maven/database/etc., SAY SO.
+
+Never say "everything works" when you could not actually verify it.
+
+---
+
+# ONE MORE IMPORTANT RULE
+
+Do not hallucinate.
+
+If you haven't read a file, don't claim you have.
+
+If you haven't found an endpoint, don't assume it exists.
+
+If you haven't verified a class/method/field, don't write code based on an assumption.
+
+When something needs confirmation from the repository, inspect the repository first.
+
+When something requires a product/business decision from me, ask me.
+
+---
+
+# YOUR FIRST RESPONSE
+
+For your FIRST response in this conversation, do NOT write or modify code.
+
+Instead:
+
+1. Confirm that you will follow the workflow above.
+2. Read the handoff document completely.
+3. Inspect the repository structure and the relevant existing code.
+4. Tell me the current state of the booking/payment flow.
+5. Tell me what is actually missing for Phase 2.
+6. Identify any problems you see in the current implementation.
+7. Identify the decisions you need from me.
+8. Propose a step-by-step implementation plan.
+
+Then STOP and wait for my approval.
+
+Do not make code changes yet.

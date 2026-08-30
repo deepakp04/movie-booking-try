@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Authentication | PVR Cinema</title>
+    <link rel="stylesheet" href="/auth.css">
+</head>
+<body>
+    <div class="auth-container">
+        <!-- Header / Branding -->
+        <div class="brand-header">
+            <h1 class="brand-title">PVR <span>CINEMAS</span></h1>
+            <p class="brand-subtitle">Authentication Portal</p>
+        </div>
+
+        <!-- Global Alert Box -->
+        <div id="alertBox" class="alert hidden"></div>
+
+        <!-- View 1: Login -->
+        <div id="loginView" class="auth-card">
+            <h2>Sign In</h2>
+            <form id="loginForm" novalidate>
+                <div class="form-group">
+                    <label for="loginEmail">Email Address</label>
+                    <input type="email" id="loginEmail" placeholder="name@example.com" required>
+                </div>
+                <div class="form-group">
+                    <label for="loginPassword">Password</label>
+                    <input type="password" id="loginPassword" placeholder="••••••••" required>
+                </div>
+                <button type="submit" class="btn btn-primary">Send Login OTP</button>
+            </form>
+            <div class="card-footer">
+                <a href="#" onclick="switchView('forgotPasswordView')">Forgot Password?</a>
+                <span>|</span>
+                <a href="#" onclick="switchView('registerView')">Create Account</a>
+            </div>
+        </div>
+
+        <!-- View 2: Register -->
+        <div id="registerView" class="auth-card hidden">
+            <h2>Create Account</h2>
+            <form id="registerForm" novalidate>
+                <div class="form-group">
+                    <label for="regName">Full Name</label>
+                    <input type="text" id="regName" placeholder="John Doe" required>
+                </div>
+                <div class="form-group">
+                    <label for="regEmail">Email Address</label>
+                    <input type="email" id="regEmail" placeholder="name@example.com" required>
+                </div>
+                <div class="form-group">
+                    <label for="regPassword">Password</label>
+                    <input type="password" id="regPassword" placeholder="Min 8 chars, 1 Upper, 1 Special, 1 Num" required>
+                </div>
+                <button type="submit" class="btn btn-primary">Register Account</button>
+            </form>
+            <div class="card-footer">
+                Already have an account? <a href="#" onclick="switchView('loginView')">Sign In</a>
+            </div>
+        </div>
+
+        <!-- View 3: Universal OTP Verification -->
+        <div id="otpView" class="auth-card hidden">
+            <h2 id="otpTitle">Verify OTP</h2>
+            <p class="info-text">An 6-digit code was sent to <strong id="otpTargetEmail"></strong></p>
+            <form id="otpForm" novalidate>
+                <div class="form-group">
+                    <label for="otpInput">Enter 6-Digit OTP</label>
+                    <input type="text" id="otpInput" maxlength="6" pattern="\d{6}" placeholder="123456" required autocomplete="off">
+                </div>
+                
+                <!-- Extra input field for Reset Password Flow -->
+                <div id="newPasswordGroup" class="form-group hidden">
+                    <label for="newPasswordInput">New Password</label>
+                    <input type="password" id="newPasswordInput" placeholder="Enter new strong password">
+                </div>
+
+                <button type="submit" class="btn btn-primary" id="otpSubmitBtn">Verify & Proceed</button>
+            </form>
+            
+            <div class="card-footer-stack">
+                <button id="resendOtpBtn" type="button" class="btn-link" onclick="handleResendOtp()">Resend OTP</button>
+                <a href="#" onclick="switchView('loginView')">Back to Sign In</a>
+            </div>
+        </div>
+
+        <!-- View 4: Forgot Password Request -->
+        <div id="forgotPasswordView" class="auth-card hidden">
+            <h2>Forgot Password</h2>
+            <p class="info-text">Enter your registered email to receive a password reset OTP.</p>
+            <form id="forgotPasswordForm" novalidate>
+                <div class="form-group">
+                    <label for="forgotEmail">Email Address</label>
+                    <input type="email" id="forgotEmail" placeholder="name@example.com" required>
+                </div>
+                <button type="submit" class="btn btn-primary">Send Reset OTP</button>
+            </form>
+            <div class="card-footer">
+                Remembered your password? <a href="#" onclick="switchView('loginView')">Sign In</a>
+            </div>
+        </div>
+
+        <!-- View 5: Account Settings / Danger Zone -->
+        <div id="accountSettingsView" class="auth-card hidden">
+            <h2>Account Security</h2>
+            <p class="info-text">Manage your active sessions or request account deletion.</p>
+            
+            <button type="button" class="btn btn-primary mb-10" onclick="switchView('myBookingsView')" style="width: 100%; margin-bottom: 10px;">🎬 My Bookings</button>
+            <button type="button" class="btn btn-secondary mb-10" onclick="handleLogout()">Logout</button>
+            <button type="button" class="btn btn-secondary mb-10" onclick="handleLogoutAll()">Logout From All Devices</button>
+            
+            <hr class="divider">
+
+            <h3 class="danger-title">Danger Zone</h3>
+            <p class="info-text">Account deletion requires OTP confirmation via email.</p>
+            <form id="requestDeletionForm" novalidate>
+                <div class="form-group">
+                    <label for="deleteEmail">Confirm Email Address</label>
+                    <input type="email" id="deleteEmail" placeholder="name@example.com" required>
+                </div>
+                <button type="submit" class="btn btn-danger">Request Deletion OTP</button>
+            </form>
+        </div>
+
+        <!-- View 6: My Bookings -->
+        <div id="myBookingsView" class="auth-card hidden" style="max-width: 900px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <h2>My Bookings</h2>
+                <button type="button" class="btn btn-secondary btn-sm" onclick="switchView('accountSettingsView')">← Back to Account</button>
+            </div>
+            <p class="info-text">View all your ticket bookings and their status.</p>
+            
+            <div id="bookingsListContainer">
+                <p style="text-align: center; color: var(--text-muted); padding: 40px 0;">Loading your bookings...</p>
+            </div>
+        </div>
+    </div>
+
+    <script src="auth.js"></script>
+</body>
+</html>

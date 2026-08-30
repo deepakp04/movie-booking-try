@@ -1,0 +1,475 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PVR Cinemas | Admin & Management Portal</title>
+    <link rel="stylesheet" href="/admin.css">
+</head>
+<body>
+
+    <!-- Top Admin Bar -->
+    <header class="admin-navbar">
+        <div class="nav-brand">
+            PVR <span>ADMIN PORTAL</span>
+        </div>
+        <div class="nav-user">
+            <span id="adminEmailDisplay" class="user-badge">Admin User</span>
+            <button class="btn btn-secondary btn-sm" onclick="handleLogout()">Logout</button>
+        </div>
+    </header>
+
+    <div class="admin-container">
+        
+        <!-- Sidebar Navigation Tabs -->
+        <aside class="sidebar">
+            <button class="nav-tab active" onclick="switchTab('citiesTab')">📍 Manage Cities</button>
+            <button class="nav-tab" onclick="switchTab('moviesTab')">🎬 Movie Library</button>
+            <button class="nav-tab" onclick="switchTab('theatresTab')">🏛️ Theatres & Screens</button>
+            <button class="nav-tab" onclick="switchTab('showsTab')">📅 Schedule Shows</button>
+            <button class="nav-tab" onclick="switchTab('maintenanceTab')">🛠️ Maintenance</button>
+        </aside>
+
+        <!-- Main Content Area -->
+        <main class="content-area">
+            
+            <!-- Global Alert Box -->
+            <div id="adminAlert" class="alert hidden"></div>
+
+            <!-- TAB 1: MANAGE CITIES -->
+            <section id="citiesTab" class="tab-content">
+                <div class="section-title">
+                    <h2>Operational Cities</h2>
+                    <p class="subtitle">Add cities where PVR operates cinemas.</p>
+                </div>
+
+                <div class="grid-layout">
+                    <!-- Add City Form Card -->
+                    <div class="admin-card">
+                        <h3>Add New City</h3>
+                        <form id="addCityForm" novalidate>
+                            <div class="form-group">
+                                <label for="cityName">City Name</label>
+                                <input type="text" id="cityName" placeholder="e.g. Chennai" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="cityState">State</label>
+                                <input type="text" id="cityState" placeholder="e.g. Tamil Nadu" required>
+                            </div>
+                            <button type="submit" class="btn btn-primary">Save City</button>
+                        </form>
+                    </div>
+
+                    <!-- City Table List -->
+                    <div class="admin-card">
+                        <h3>Existing Cities</h3>
+                        <div class="table-wrapper">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>ID</th>
+                                        <th>City</th>
+                                        <th>State</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="citiesTableBody">
+                                    <!-- Dynamic Rows -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- TAB 2: MOVIE LIBRARY -->
+            <section id="moviesTab" class="tab-content hidden">
+                <div class="section-title">
+                    <h2>Master Movie Library</h2>
+                    <p class="subtitle">Add now-showing and upcoming titles.</p>
+                </div>
+
+                <div class="grid-layout">
+                    <!-- Add Movie Form Card -->
+                    <div class="admin-card">
+                        <h3>Create Movie Record</h3>
+                        <form id="addMovieForm" novalidate>
+                            <div class="form-group">
+                                <label for="movieTitle">Movie Title</label>
+                                <input type="text" id="movieTitle" placeholder="e.g. Interstellar" required>
+                            </div>
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label for="movieCbfc">CBFC Rating</label>
+                                    <select id="movieCbfc" required>
+                                        <option value="U">U</option>
+                                        <option value="UA">U/A 13+</option>
+                                        <option value="UA16">U/A 16+</option>
+                                        <option value="A">A (Adults Only)</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label for="movieDuration">Duration (Mins)</label>
+                                    <input type="number" id="movieDuration" placeholder="169" required>
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label for="movieRelease">Release Date</label>
+                                <input type="date" id="movieRelease" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="movieLanguages">Languages (Comma Separated)</label>
+                                <input type="text" id="movieLanguages" placeholder="English, Tamil, Hindi" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="movieFormats">Formats (Comma Separated)</label>
+                                <input type="text" id="movieFormats" placeholder="2D, 3D, IMAX 3D" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="moviePoster">Poster Image URL</label>
+                                <input type="url" id="moviePoster" placeholder="https://..." required>
+                            </div>
+                            <div class="form-group">
+                                <label for="movieBanner">Banner Image URL</label>
+                                <input type="url" id="movieBanner" placeholder="https://...">
+                            </div>
+                            <div class="form-group">
+                                <label for="movieCast">Cast & Crew</label>
+                                <input type="text" id="movieCast" placeholder="Matthew McConaughey, Anne Hathaway">
+                            </div>
+                            <div class="form-group">
+                                <label for="movieDesc">Plot Description</label>
+                                <textarea id="movieDesc" rows="3" placeholder="Brief synopsis..."></textarea>
+                            </div>
+                            <button type="submit" class="btn btn-primary">Add Movie</button>
+                        </form>
+                    </div>
+
+                    <!-- Movies Table List -->
+                    <div class="admin-card">
+                        <h3>Movie Database</h3>
+                        <div class="table-wrapper">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>Poster</th>
+                                        <th>Title</th>
+                                        <th>CBFC</th>
+                                        <th>Runtime</th>
+                                        <th>Languages</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="moviesTableBody">
+                                    <!-- Dynamic Rows -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- TAB 3: THEATRES & SCREENS -->
+            <section id="theatresTab" class="tab-content hidden">
+                <div class="section-title">
+                    <h2>Theatres & Screen Management</h2>
+                    <p class="subtitle">Register venues and configure auditoriums/screens.</p>
+                </div>
+
+                <div class="grid-layout">
+                    <!-- Form 1: Add Theatre -->
+                    <div class="admin-card">
+                        <h3>Register Theatre Venue</h3>
+                        <form id="addTheatreForm" novalidate>
+                            <div class="form-group">
+                                <label for="theatreCitySelect">City</label>
+                                <select id="theatreCitySelect" required>
+                                    <option value="" disabled selected>Select City</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="theatreName">Theatre Name</label>
+                                <input type="text" id="theatreName" placeholder="e.g. PVR Grand Galada" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="theatreAddress">Address</label>
+                                <input type="text" id="theatreAddress" placeholder="GST Road, Pallavaram" required>
+                            </div>
+                            <button type="submit" class="btn btn-primary">Register Theatre</button>
+                        </form>
+
+                        <hr class="divider">
+
+                        <!-- Form 2: Add Screen to Theatre -->
+                        <h3>Add Screen / Auditorium</h3>
+                        <form id="addScreenForm" novalidate>
+                            <div class="form-group">
+                                <label for="screenTheatreSelect">Target Theatre</label>
+                                <select id="screenTheatreSelect" required>
+                                    <option value="" disabled selected>Select Theatre</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="screenName">Screen Name</label>
+                                <input type="text" id="screenName" placeholder="e.g. Screen 1 (IMAX)" required>
+                            </div>
+                            <p class="subtitle" style="margin: 0 0 14px 0;">
+                                Seat capacity is set by drawing the layout in the
+                                <strong>Maintenance</strong> tab, so it always matches the actual seats.
+                            </p>
+                            <button type="submit" class="btn btn-secondary">Add Screen</button>
+                        </form>
+                    </div>
+
+                    <!-- Listed Theatres -->
+                    <div class="admin-card">
+                        <h3>Active Theatres</h3>
+                        <div id="theatresListContainer">
+                            <!-- Dynamic Accordion/Cards -->
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- TAB 4: SCHEDULE SHOWS -->
+            <section id="showsTab" class="tab-content hidden">
+                <div class="section-title">
+                    <h2>Schedule Showtimes</h2>
+                    <p class="subtitle">Create date/time slots linking movies to theatre screens.</p>
+                </div>
+
+                <div class="grid-layout">
+                    <!-- Schedule Form Card -->
+                    <div class="admin-card">
+                        <h3>Create Show Slot</h3>
+                        <form id="addShowForm" novalidate>
+                            <div class="form-group">
+                                <label for="showCitySelect">City</label>
+                                <select id="showCitySelect" onchange="loadTheatresForCity(this.value)" required>
+                                    <option value="" disabled selected>Select City</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="showTheatreSelect">Theatre</label>
+                                <select id="showTheatreSelect" onchange="loadScreensForTheatre(this.value)" required>
+                                    <option value="" disabled selected>Select Theatre First</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="showScreenSelect">Auditorium / Screen</label>
+                                <select id="showScreenSelect" onchange="loadTiersForShowScreen(this.value)" required>
+                                    <option value="" disabled selected>Select Screen First</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="showMovieSelect">Select Movie</label>
+                                <select id="showMovieSelect" required>
+                                    <option value="" disabled selected>Select Movie</option>
+                                </select>
+                            </div>
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label for="showStartTime">Start Date & Time</label>
+                                    <input type="datetime-local" id="showStartTime" required>
+                                </div>
+                                <div class="form-group">
+                                    <label for="showPrice">Base Ticket Price (₹)</label>
+                                    <input type="number" id="showPrice" placeholder="350" required>
+                                </div>
+                            </div>
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label for="showFormat">Screening Format</label>
+                                    <select id="showFormat" required>
+                                        <option value="" disabled selected>Select Format</option>
+                                        <option value="TWO_D">2D</option>
+                                        <option value="THREE_D">3D</option>
+                                        <option value="IMAX_2D">IMAX 2D</option>
+                                        <option value="IMAX_3D">IMAX 3D</option>
+                                        <option value="FOUR_DX">4DX</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label for="showLanguage">Audio Language</label>
+                                    <select id="showLanguage" required>
+                                        <option value="" disabled selected>Select Language</option>
+                                        <option value="ENGLISH">English</option>
+                                        <option value="TAMIL">Tamil</option>
+                                        <option value="HINDI">Hindi</option>
+                                        <option value="TELUGU">Telugu</option>
+                                        <option value="KANNADA">Kannada</option>
+                                        <option value="MALAYALAM">Malayalam</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label style="display:flex;align-items:center;gap:8px;">
+                                    <input type="checkbox" id="showCaptions" style="width:auto;">
+                                    Subtitles / captions available
+                                </label>
+                            </div>
+                            <!-- Populated when a screen is chosen. Pricing is per show,
+                                 so every tier on that screen needs its own price. -->
+                            <div id="showTierPrices" class="form-group hidden">
+                                <label>Ticket Price by Seat Tier (₹)</label>
+                                <div id="showTierPriceRows"></div>
+                                <p class="subtitle" style="margin: 6px 0 0 0;">
+                                    Each tier on this screen must be priced.
+                                </p>
+                            </div>
+                            <!-- Optional: reserve specific seats at scheduling time -->
+                            <div class="form-group">
+                                <label for="showReservedSeats">Reserve Seats (Optional)</label>
+                                <textarea id="showReservedSeats" rows="3" placeholder="Enter seat codes to reserve (comma-separated), e.g.: A1, A2, B5"></textarea>
+                                <p class="subtitle" style="margin: 6px 0 0 0;">
+                                    Reserve house seats, complimentary blocks, or technical holds. These seats will be permanently unavailable to customers.
+                                </p>
+                            </div>
+
+                            <button type="submit" class="btn btn-primary">Schedule Show</button>
+                        </form>
+                    </div>
+
+                    <!-- Scheduled Shows List -->
+                    <div class="admin-card">
+                        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
+                            <h3 style="margin:0;">Scheduled Shows</h3>
+                            <div style="display:flex; align-items:center; gap:8px;">
+                                <label style="margin:0; font-size:0.8rem; color:var(--text-muted);">Show</label>
+                                <select id="showScopeSelect" onchange="loadShows()" style="width:auto;">
+                                    <option value="upcoming" selected>Today &amp; upcoming</option>
+                                    <option value="past">Past</option>
+                                    <option value="all">All</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="table-wrapper">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>Show ID</th>
+                                        <th>Movie</th>
+                                        <th>Theatre / Screen</th>
+                                        <th>Start Time</th>
+                                        <th>Price</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="showsTableBody">
+                                    <!-- Dynamic Rows -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+
+            <!-- ============ THEATRE MAINTENANCE ============ -->
+            <section id="maintenanceTab" class="tab-content hidden">
+                <div class="section-title">
+                    <h2>Theatre Maintenance</h2>
+                    <p class="subtitle">Define pricing tiers and draw the seat layout for each screen. Seat numbers are generated automatically and skip pathways.</p>
+                </div>
+
+                <!-- STEP 1 -->
+                <div class="admin-card">
+                    <h3>Step 1 &mdash; Choose a Screen</h3>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="mtTheatreSelect">Theatre</label>
+                            <select id="mtTheatreSelect" onchange="mtOnTheatreChange()">
+                                <option value="" disabled selected>Select Theatre</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="mtScreenSelect">Screen</label>
+                            <select id="mtScreenSelect" onchange="mtOnScreenChange()">
+                                <option value="" disabled selected>Select Screen</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="mtPanels" class="hidden">
+
+                    <!-- STEP 2 -->
+                    <div class="admin-card">
+                        <h3>Step 2 &mdash; Seat Tiers</h3>
+                        <p class="subtitle">Create the pricing classes for this screen, for example BUDGET, PREMIUM and DIAMOND. Prices are set per show when you schedule it.</p>
+
+                        <div id="mtLockBanner" class="alert alert-error hidden" style="margin-bottom: 16px;"></div>
+
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="mtTierName">Tier Name</label>
+                                <input type="text" id="mtTierName" placeholder="e.g. DIAMOND">
+                            </div>
+                            <div class="form-group">
+                                <label for="mtTierOrder">Display Order</label>
+                                <input type="number" id="mtTierOrder" value="0">
+                            </div>
+                            <div class="form-group">
+                                <label for="mtTierColor">Colour</label>
+                                <input type="color" id="mtTierColor" value="#C9A227">
+                            </div>
+                        </div>
+                        <button class="btn btn-secondary" onclick="mtCreateTier()">Add Tier</button>
+
+                        <div class="divider"></div>
+
+                        <div class="table-wrapper">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>Colour</th>
+                                        <th>Name</th>
+                                        <th>Order</th>
+                                        <th>Seats</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="mtTierTableBody"></tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- STEP 3 -->
+                    <div class="admin-card">
+                        <h3>Step 3 &mdash; Draw the Seat Layout</h3>
+                        <p class="subtitle">Set the grid size, pick a paint tool, then click or drag across cells. Screen capacity updates when you save.</p>
+
+                        <div class="designer-controls">
+                            <label>Rows <input type="number" id="mtRows" value="8" min="1" max="26"></label>
+                            <label>Columns <input type="number" id="mtCols" value="12" min="1" max="30"></label>
+                            <button class="btn btn-secondary btn-sm" onclick="mtBuildGrid()">Build Grid</button>
+                        </div>
+
+                        <div class="designer-controls">
+                            <label style="margin-right: 4px;">Paint</label>
+                            <div id="mtPalette" style="display: flex; gap: 8px; flex-wrap: wrap;"></div>
+                        </div>
+
+                        <div class="grid-canvas" id="mtGridWrap">
+                            <div id="mtGrid"></div>
+                        </div>
+
+                        <p class="subtitle" id="mtSummary" style="margin-top: 12px;"></p>
+
+                        <div class="divider"></div>
+                        <button class="btn btn-primary" onclick="mtSaveLayout()">Save Layout</button>
+                    </div>
+                </div>
+            </section>
+
+        </main>
+    </div>
+
+    <script src="/admin.js"></script>
+	
+	<!-- SEAT LAYOUT DESIGNER MODAL -->
+	<!-- The old seat-layout modal was removed: the layout designer now lives
+	     in the Maintenance tab, which also handles seat tiers. -->
+
+</body>
+</html>

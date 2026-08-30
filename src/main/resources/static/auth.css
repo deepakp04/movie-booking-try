@@ -1,0 +1,244 @@
+:root {
+    --bg-color: #0d0f12;
+    --card-bg: #16191e;
+    --border-color: #2a2e37;
+    --primary-gold: #e5b80b;
+    --primary-hover: #c9a007;
+    --text-main: #f0f2f5;
+    --text-muted: #8c93a0;
+    --danger-red: #e53935;
+    --success-green: #2e7d32;
+    --font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    background-color: var(--bg-color);
+    color: var(--text-main);
+    font-family: var(--font-family);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    padding: 20px;
+}
+
+.auth-container {
+    width: 100%;
+    max-width: 420px;
+}
+
+.brand-header {
+    text-align: center;
+    margin-bottom: 24px;
+}
+
+.brand-title {
+    font-size: 2rem;
+    letter-spacing: 2px;
+    color: #ffffff;
+}
+
+.brand-title span {
+    color: var(--primary-gold);
+}
+
+.brand-subtitle {
+    color: var(--text-muted);
+    font-size: 0.85rem;
+    margin-top: 4px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.auth-card {
+    background-color: var(--card-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 28px;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
+}
+
+.auth-card h2 {
+    font-size: 1.35rem;
+    margin-bottom: 16px;
+    font-weight: 600;
+}
+
+.info-text {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    margin-bottom: 18px;
+    line-height: 1.4;
+}
+
+.form-group {
+    margin-bottom: 18px;
+}
+
+.form-group label {
+    display: block;
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    margin-bottom: 6px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.form-group input {
+    width: 100%;
+    padding: 12px;
+    background-color: #0b0c0e;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    color: #ffffff;
+    font-size: 0.95rem;
+    outline: none;
+    transition: border-color 0.2s;
+}
+
+.form-group input:focus {
+    border-color: var(--primary-gold);
+}
+
+.btn {
+    width: 100%;
+    padding: 12px;
+    border: none;
+    border-radius: 4px;
+    font-size: 0.95rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+.btn-primary {
+    background-color: var(--primary-gold);
+    color: #000000;
+}
+
+.btn-primary:hover {
+    background-color: var(--primary-hover);
+}
+
+.btn-secondary {
+    background-color: #2a2e37;
+    color: #ffffff;
+}
+
+.btn-secondary:hover {
+    background-color: #383e4a;
+}
+
+.btn-danger {
+    background-color: var(--danger-red);
+    color: #ffffff;
+}
+
+.btn-danger:hover {
+    background-color: #c62828;
+}
+
+.btn-link {
+    background: none;
+    border: none;
+    color: var(--primary-gold);
+    cursor: pointer;
+    font-size: 0.85rem;
+    text-decoration: underline;
+}
+
+.card-footer {
+    margin-top: 20px;
+    text-align: center;
+    font-size: 0.85rem;
+    color: var(--text-muted);
+}
+
+.card-footer a {
+    color: var(--primary-gold);
+    text-decoration: none;
+}
+
+.card-footer a:hover {
+    text-decoration: underline;
+}
+
+.card-footer span {
+    margin: 0 8px;
+    color: var(--border-color);
+}
+
+.card-footer-stack {
+    margin-top: 20px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+}
+
+.card-footer-stack a {
+    color: var(--text-muted);
+    text-decoration: none;
+    font-size: 0.85rem;
+}
+
+.alert {
+    padding: 12px;
+    border-radius: 4px;
+    font-size: 0.85rem;
+    margin-bottom: 18px;
+}
+
+.alert-error {
+    background-color: rgba(229, 57, 53, 0.15);
+    border: 1px solid var(--danger-red);
+    color: #ff8a80;
+}
+
+.alert-success {
+    background-color: rgba(46, 125, 50, 0.15);
+    border: 1px solid var(--success-green);
+    color: #b9f6ca;
+}
+
+.hidden {
+    display: none !important;
+}
+
+.mb-10 {
+    margin-bottom: 10px;
+}
+
+.divider {
+    border: 0;
+    height: 1px;
+    background: var(--border-color);
+    margin: 20px 0;
+}
+
+.danger-title {
+    font-size: 1rem;
+    color: var(--danger-red);
+    margin-bottom: 8px;
+}
+
+/* Input with validation error */
+.form-group input.input-error {
+    border-color: var(--danger-red) !important;
+    background-color: rgba(229, 57, 53, 0.05);
+}
+
+/* Field-level error message text */
+.field-error-msg {
+    color: #ff8a80;
+    font-size: 0.78rem;
+    margin-top: 5px;
+    display: block;
+    line-height: 1.2;
+}

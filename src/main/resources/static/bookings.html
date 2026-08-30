@@ -1,0 +1,502 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My Bookings - Movie Booking System</title>
+    <link rel="stylesheet" href="auth.css">
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            margin: 0;
+            padding: 20px;
+        }
+        
+        .bookings-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+            padding: 30px;
+        }
+        
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+            padding-bottom: 20px;
+            border-bottom: 2px solid #f0f0f0;
+        }
+        
+        .header h1 {
+            color: #333;
+            margin: 0;
+            font-size: 28px;
+        }
+        
+        .back-btn {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            text-decoration: none;
+            display: inline-block;
+        }
+        
+        .back-btn:hover {
+            background: #5568d3;
+        }
+        
+        .filter-section {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+        
+        .filter-btn {
+            padding: 8px 16px;
+            border: 2px solid #667eea;
+            background: white;
+            color: #667eea;
+            border-radius: 20px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.3s;
+        }
+        
+        .filter-btn.active {
+            background: #667eea;
+            color: white;
+        }
+        
+        .filter-btn:hover {
+            background: #667eea;
+            color: white;
+        }
+        
+        .bookings-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+            gap: 20px;
+        }
+        
+        .booking-card {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 20px;
+            border-left: 4px solid #667eea;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        
+        .booking-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+        
+        .booking-card.pending {
+            border-left-color: #f39c12;
+        }
+        
+        .booking-card.confirmed {
+            border-left-color: #27ae60;
+        }
+        
+        .booking-card.cancelled {
+            border-left-color: #e74c3c;
+        }
+        
+        .booking-card.expired {
+            border-left-color: #95a5a6;
+        }
+        
+        .booking-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: start;
+            margin-bottom: 15px;
+        }
+        
+        .movie-title {
+            font-size: 18px;
+            font-weight: bold;
+            color: #333;
+            margin: 0 0 5px 0;
+        }
+        
+        .status-badge {
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: bold;
+            text-transform: uppercase;
+        }
+        
+        .status-badge.pending {
+            background: #fef5e7;
+            color: #f39c12;
+        }
+        
+        .status-badge.confirmed {
+            background: #e8f8f0;
+            color: #27ae60;
+        }
+        
+        .status-badge.cancelled {
+            background: #fdedec;
+            color: #e74c3c;
+        }
+        
+        .status-badge.expired {
+            background: #f2f3f4;
+            color: #95a5a6;
+        }
+        
+        .booking-details {
+            color: #666;
+            font-size: 14px;
+            line-height: 1.8;
+        }
+        
+        .booking-details strong {
+            color: #333;
+        }
+        
+        .seats-info {
+            margin-top: 10px;
+            padding-top: 10px;
+            border-top: 1px dashed #ddd;
+        }
+        
+        .seat-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 5px;
+            margin-top: 5px;
+        }
+        
+        .seat-tag {
+            background: #667eea;
+            color: white;
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+        }
+        
+        .booking-actions {
+            margin-top: 15px;
+            display: flex;
+            gap: 10px;
+        }
+        
+        .action-btn {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 13px;
+            transition: all 0.2s;
+        }
+        
+        .cancel-btn {
+            background: #e74c3c;
+            color: white;
+        }
+        
+        .cancel-btn:hover {
+            background: #c0392b;
+        }
+        
+        .view-btn {
+            background: #667eea;
+            color: white;
+        }
+        
+        .view-btn:hover {
+            background: #5568d3;
+        }
+        
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: #999;
+        }
+        
+        .empty-state h2 {
+            font-size: 24px;
+            margin-bottom: 10px;
+        }
+        
+        .countdown {
+            color: #e74c3c;
+            font-weight: bold;
+            font-size: 13px;
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #667eea;
+            font-size: 18px;
+        }
+        
+        .error-message {
+            background: #fdedec;
+            color: #e74c3c;
+            padding: 15px;
+            border-radius: 6px;
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="bookings-container">
+        <div class="header">
+            <h1>🎬 My Bookings</h1>
+            <a href="index.html" class="back-btn">← Back to Home</a>
+        </div>
+        
+        <div id="error-container"></div>
+        
+        <div class="filter-section">
+            <button class="filter-btn active" onclick="filterBookings('all')">All</button>
+            <button class="filter-btn" onclick="filterBookings('PENDING_PAYMENT')">Pending Payment</button>
+            <button class="filter-btn" onclick="filterBookings('CONFIRMED')">Confirmed</button>
+            <button class="filter-btn" onclick="filterBookings('CANCELLED')">Cancelled</button>
+            <button class="filter-btn" onclick="filterBookings('EXPIRED')">Expired</button>
+        </div>
+        
+        <div id="bookings-content">
+            <div class="loading">Loading your bookings...</div>
+        </div>
+    </div>
+
+    <script src="js/catalog.js"></script>
+    <script>
+        let allBookings = [];
+        let currentFilter = 'all';
+
+        // Check authentication on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            const token = localStorage.getItem('accessToken');
+            if (!token) {
+                window.location.href = 'auth.html';
+                return;
+            }
+            loadBookings();
+        });
+
+        async function loadBookings() {
+            try {
+                const token = localStorage.getItem('accessToken');
+                const response = await fetch('/api/booking/my-bookings', {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                if (response.status === 401) {
+                    localStorage.removeItem('accessToken');
+                    localStorage.removeItem('refreshToken');
+                    window.location.href = 'auth.html';
+                    return;
+                }
+
+                const result = await response.json();
+                
+                if (result.success && result.data) {
+                    allBookings = result.data;
+                    renderBookings(allBookings);
+                } else {
+                    showError(result.message || 'Failed to load bookings');
+                }
+            } catch (error) {
+                console.error('Error loading bookings:', error);
+                showError('Unable to connect to server. Please try again.');
+            }
+        }
+
+        function filterBookings(status) {
+            currentFilter = status;
+            
+            // Update active button
+            document.querySelectorAll('.filter-btn').forEach(btn => {
+                btn.classList.remove('active');
+                if (btn.textContent.toLowerCase().includes(status.toLowerCase()) || 
+                    (status === 'all' && btn.textContent === 'All')) {
+                    btn.classList.add('active');
+                }
+            });
+
+            if (status === 'all') {
+                renderBookings(allBookings);
+            } else {
+                const filtered = allBookings.filter(b => b.status === status);
+                renderBookings(filtered);
+            }
+        }
+
+        function renderBookings(bookings) {
+            const container = document.getElementById('bookings-content');
+            
+            if (!bookings || bookings.length === 0) {
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <h2>No bookings yet</h2>
+                        <p>Start by browsing movies and booking your first show!</p>
+                        <a href="index.html" class="back-btn" style="margin-top: 15px;">Browse Movies</a>
+                    </div>
+                `;
+                return;
+            }
+
+            container.innerHTML = `
+                <div class="bookings-grid">
+                    ${bookings.map(booking => createBookingCard(booking)).join('')}
+                </div>
+            `;
+        }
+
+        function createBookingCard(booking) {
+            const statusClass = booking.status.toLowerCase().replace('_', '');
+            const showTime = new Date(booking.showTime).toLocaleString('en-IN', {
+                dateStyle: 'medium',
+                timeStyle: 'short'
+            });
+            
+            let countdownHtml = '';
+            if (booking.status === 'PENDING_PAYMENT' && booking.holdExpiresAt) {
+                const expiresAt = new Date(booking.holdExpiresAt);
+                const now = new Date();
+                const timeLeft = expiresAt - now;
+                
+                if (timeLeft > 0) {
+                    const minutes = Math.floor(timeLeft / 60000);
+                    const seconds = Math.floor((timeLeft % 60000) / 1000);
+                    countdownHtml = `<div class="countdown">⏰ Expires in: ${minutes}m ${seconds}s</div>`;
+                }
+            }
+
+            const seats = booking.seatCodes || [];
+            const seatsHtml = seats.slice(0, 5).map(s => `<span class="seat-tag">${s}</span>`).join('');
+            const moreSeats = seats.length > 5 ? `<span class="seat-tag">+${seats.length - 5} more</span>` : '';
+
+            return `
+                <div class="booking-card ${statusClass}">
+                    <div class="booking-header">
+                        <div>
+                            <h3 class="movie-title">${booking.movieTitle}</h3>
+                            <div style="color: #666; font-size: 13px;">${booking.theatreName} - ${booking.screenName}</div>
+                        </div>
+                        <span class="status-badge ${statusClass}">${booking.status.replace('_', ' ')}</span>
+                    </div>
+                    
+                    <div class="booking-details">
+                        <div><strong>📅</strong> ${showTime}</div>
+                        <div><strong>💺</strong> ${booking.numberOfSeats} seat(s)</div>
+                        <div><strong>💰</strong> ₹${booking.totalAmount}</div>
+                        ${countdownHtml}
+                    </div>
+                    
+                    <div class="seats-info">
+                        <strong>Seats:</strong>
+                        <div class="seat-list">
+                            ${seatsHtml}
+                            ${moreSeats}
+                        </div>
+                    </div>
+                    
+                    <div class="booking-actions">
+                        ${booking.status === 'PENDING_PAYMENT' ? 
+                            `<button class="action-btn cancel-btn" onclick="cancelBooking(${booking.id})">Cancel Booking</button>` : 
+                            ''
+                        }
+                        <button class="action-btn view-btn" onclick="viewBookingDetails(${booking.id})">View Details</button>
+                    </div>
+                </div>
+            `;
+        }
+
+        async function cancelBooking(bookingId) {
+            if (!confirm('Are you sure you want to cancel this booking? The seats will be released.')) {
+                return;
+            }
+
+            try {
+                const token = localStorage.getItem('accessToken');
+                const response = await fetch(`/api/booking/${bookingId}/cancel`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                const result = await response.json();
+                
+                if (result.success) {
+                    alert('Booking cancelled successfully!');
+                    loadBookings();
+                } else {
+                    alert(result.message || 'Failed to cancel booking');
+                }
+            } catch (error) {
+                console.error('Error cancelling booking:', error);
+                alert('Unable to cancel booking. Please try again.');
+            }
+        }
+
+        function viewBookingDetails(bookingId) {
+            const booking = allBookings.find(b => b.id === bookingId);
+            if (!booking) return;
+
+            const showTime = new Date(booking.showTime).toLocaleString('en-IN', {
+                dateStyle: 'full',
+                timeStyle: 'short'
+            });
+
+            alert(`
+BOOKING DETAILS
+================
+Booking ID: ${booking.id}
+Transaction ID: ${booking.transactionId}
+
+Movie: ${booking.movieTitle}
+Theatre: ${booking.theatreName}
+Screen: ${booking.screenName}
+Date & Time: ${showTime}
+
+Seats: ${booking.seatCodes.join(', ')}
+Total Amount: ₹${booking.totalAmount}
+Status: ${booking.status.replace('_', ' ')}
+${booking.holdExpiresAt ? 'Hold Expires: ' + new Date(booking.holdExpiresAt).toLocaleString() : ''}
+            `);
+        }
+
+        function showError(message) {
+            document.getElementById('error-container').innerHTML = `
+                <div class="error-message">${message}</div>
+            `;
+        }
+
+        // Auto-refresh countdown timers every second
+        setInterval(() => {
+            if (currentFilter === 'all' || currentFilter === 'PENDING_PAYMENT') {
+                const pendingBookings = allBookings.filter(b => b.status === 'PENDING_PAYMENT');
+                if (pendingBookings.length > 0) {
+                    renderBookings(currentFilter === 'all' ? allBookings : pendingBookings);
+                }
+            }
+        }, 1000);
+    </script>
+</body>
+</html>

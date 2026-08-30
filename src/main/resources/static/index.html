@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PVR Cinemas | Catalog & Booking</title>
+    <link rel="stylesheet" href="/css/catalog.css">
+	<script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+</head>
+<body>
+
+    <!-- Header Navigation -->
+    <header class="navbar">
+        <div class="nav-brand" onclick="navigateToHome()">
+            PVR <span>CINEMAS</span>
+        </div>
+        
+        <div class="nav-controls">
+            <div class="city-selector">
+                <span class="icon">📍</span>
+                <select id="citySelect" onchange="handleCityChange(this.value)">
+                    <option value="" disabled selected>Select City</option>
+                </select>
+            </div>
+
+            <div id="authNav">
+                <button class="btn btn-primary btn-sm" id="loginBtn" onclick="redirectToLogin()">Sign In</button>
+            </div>
+        </div>
+    </header>
+
+    <main class="main-container">
+        
+        <!-- Global Alert Box -->
+        <div id="alertBox" class="alert hidden"></div>
+
+        <!-- VIEW 1: MOVIE GRID -->
+        <section id="movieGridView" class="view">
+            <div class="section-header">
+                <h2>Now Showing in <span id="activeCityLabel" class="gold-text">Selecting Location...</span></h2>
+            </div>
+            <div id="movieGrid" class="grid-container">
+                <!-- Injected dynamically -->
+            </div>
+        </section>
+
+        <!-- VIEW 2: MOVIE DETAILS -->
+        <section id="movieDetailView" class="view hidden">
+            <button class="btn-link back-link" onclick="navigateToHome()">← Back to Movies</button>
+            
+            <div class="movie-banner-card" id="movieBanner">
+                <div class="banner-overlay">
+                    <div class="movie-header-content">
+                        <img id="detailPoster" class="detail-poster" src="" alt="Poster">
+                        <div class="detail-info">
+                            <h1 id="detailTitle">--</h1>
+                            <div class="meta-tags">
+                                <span id="detailCbfc" class="badge badge-gold">--</span>
+                                <span id="detailRuntime" class="meta-item">-- min</span>
+                                <span id="detailRelease" class="meta-item">--</span>
+                            </div>
+                            <div class="tag-group" id="detailLanguages"></div>
+                            <div class="tag-group" id="detailFormats"></div>
+                            <p id="detailCaptions" class="caption-notice hidden">✓ Closed Captions Available</p>
+                            <p id="detailDescription" class="description">--</p>
+                            <p class="cast-info"><strong>Cast & Crew:</strong> <span id="detailCast">--</span></p>
+                            
+                            <button class="btn btn-primary" style="max-width: 200px;" onclick="scrollToShowtimes()">Book Tickets</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- VIEW 3: SHOWTIMES SECTION -->
+            <div id="showtimesSection" class="showtimes-card">
+                <h2>Select Date &amp; Showtimes</h2>
+                <p id="confirmedUntilNote" class="confirmed-note hidden"></p>
+
+                <!-- Date Selector Tabs -->
+                <div id="dateBar" class="date-bar"></div>
+
+                <!-- Theatre Listings -->
+                <div id="theatreList" class="theatre-list">
+                    <!-- Injected dynamically -->
+                </div>
+            </div>
+        </section>
+		
+		<section id="seatSelectionView" class="view hidden">
+		            <div class="booking-header">
+		                <button class="btn-link back-link" onclick="goBackToMovieDetail()">← Back to Showtimes</button>
+		                <div class="booking-meta">
+		                    <h2 id="bookingMovieTitle">--</h2>
+		                    <p class="gold-text"><span id="bookingTheatreName">--</span> | <span id="bookingShowtime">--</span></p>
+		                </div>
+		            </div>
+
+		            <!-- Seat Legend -->
+		            <div class="seat-legend">
+		                <div class="legend-item"><div class="seat available"></div> Available</div>
+		                <div class="legend-item"><div class="seat selected"></div> Selected</div>
+		                <div class="legend-item"><div class="seat held"></div> Held (You)</div>
+		                <div class="legend-item"><div class="seat booked"></div> Sold</div>
+		            </div>
+
+		            <!-- Pricing tiers for this show, populated from the seat map -->
+		            <div id="tierLegend" class="seat-legend tier-legend"></div>
+
+		            <p id="seatCountHint" class="seat-count-hint"></p>
+
+		            <!-- Interactive Seat Map -->
+		            <div class="seat-map-container">
+		                <div class="screen-indicator">
+		                    <div class="screen-curve"></div>
+		                    <span>SCREEN THIS WAY</span>
+		                </div>
+		                
+		                <div id="seatGrid" class="seat-grid">
+		                    <!-- Dynamically injected via JS -->
+		                </div>
+		            </div>
+
+		            <!-- Sticky Checkout Bar -->
+		            <div id="checkoutBar" class="checkout-bar hidden">
+		                <div class="checkout-info">
+		                    <span id="selectedSeatCount">0 Tickets</span>
+		                    <h3 id="totalPriceDisplay">₹ 0</h3>
+		                </div>
+		                <button class="btn btn-primary" id="payNowBtn" onclick="proceedToPayment()">Continue</button>
+		            </div>
+		        </section>
+
+    </main>
+
+    <!-- Seat Quantity Gate: the spec requires this to be answered before the
+         seat map is shown, and it cannot be skipped. -->
+    <div id="seatCountModal" class="modal hidden">
+        <div class="modal-card">
+            <h2>How many seats?</h2>
+            <p class="info-text" style="margin-bottom: 16px;">
+                Choose the number of tickets. A maximum of 10 seats can be booked in one transaction.
+            </p>
+            <div id="seatCountOptions" class="seat-count-grid"></div>
+            <div class="modal-actions" style="margin-top: 18px;">
+                <button class="btn btn-secondary" onclick="closeSeatCountModal()">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Auth Gate Modal -->
+    <div id="authModal" class="modal hidden">
+        <div class="modal-card">
+            <h2>Authentication Required</h2>
+            <p class="info-text" style="margin-bottom: 20px;">Please sign in to your PVR Cinemas account to reserve seats and proceed with booking.</p>
+            <div class="modal-actions">
+                <button class="btn btn-secondary" onclick="closeAuthModal()">Cancel</button>
+                <button class="btn btn-primary" onclick="redirectToLogin()">Sign In / Register</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="/js/catalog.js"></script>
+</body>
+</html>
