@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>PVR Cinemas | Theatre Owner Portal</title>
     <link rel="stylesheet" href="/admin.css">
+    <link rel="stylesheet" href="/css/analytics.css">
 </head>
 <body>
 
@@ -27,6 +28,7 @@
             <button class="nav-tab" onclick="switchTab('screensTab')">🎦 Screens</button>
             <button class="nav-tab" onclick="switchTab('showsTab')">📅 Schedule Shows</button>
             <button class="nav-tab" onclick="switchTab('maintenanceTab')">🛠️ Maintenance</button>
+            <button class="nav-tab" onclick="switchTab('analyticsTab')">📊 Analytics</button>
         </aside>
 
         <!-- Main Content Area -->
@@ -279,9 +281,235 @@
                 </div>
             </section>
 
+            <!-- ============ ANALYTICS ============ -->
+            <section id="analyticsTab" class="tab-content hidden">
+                <div class="section-title">
+                    <h2>Theatre Analytics</h2>
+                    <p class="subtitle">Revenue, occupancy, and performance insights for your theatre.</p>
+                </div>
+
+                <!-- Filter Bar -->
+                <div class="analytics-filters">
+                    <div class="filter-group">
+                        <label>Date From</label>
+                        <input type="date" id="filterDateFrom">
+                    </div>
+                    <div class="filter-group">
+                        <label>Date To</label>
+                        <input type="date" id="filterDateTo">
+                    </div>
+                    <div class="filter-group">
+                        <label>Movie</label>
+                        <select id="filterMovie"></select>
+                    </div>
+                    <div class="filter-group">
+                        <label>Screen</label>
+                        <select id="filterScreen"></select>
+                    </div>
+                    <div class="filter-group">
+                        <label>Format</label>
+                        <select id="filterFormat"></select>
+                    </div>
+                    <div class="filter-group">
+                        <label>Language</label>
+                        <select id="filterLanguage"></select>
+                    </div>
+                    <div class="filter-group">
+                        <label>&nbsp;</label>
+                        <button class="btn btn-primary btn-sm" onclick="applyFilters()">Apply Filters</button>
+                    </div>
+                </div>
+
+                <!-- KPI Cards -->
+                <div class="kpi-grid">
+                    <div class="kpi-card">
+                        <div class="kpi-icon">💰</div>
+                        <div class="kpi-value" id="kpiRevenue">₹0</div>
+                        <div class="kpi-label">Total Revenue</div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-icon">🎟️</div>
+                        <div class="kpi-value" id="kpiTickets">0</div>
+                        <div class="kpi-label">Tickets Sold</div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-icon">🎬</div>
+                        <div class="kpi-value" id="kpiShows">0</div>
+                        <div class="kpi-label">Total Shows</div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-icon">📊</div>
+                        <div class="kpi-value" id="kpiAvgPrice">₹0</div>
+                        <div class="kpi-label">Avg Ticket Price</div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-icon">📈</div>
+                        <div class="kpi-value" id="kpiOccupancy">0%</div>
+                        <div class="kpi-label">Avg Occupancy</div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-icon">🎯</div>
+                        <div class="kpi-value" id="kpiRevenuePerShow">₹0</div>
+                        <div class="kpi-label">Revenue / Show</div>
+                    </div>
+                </div>
+
+                <!-- Revenue Trend -->
+                <div class="chart-row">
+                    <div class="chart-card chart-full">
+                        <h3>📈 Revenue Trend (Daily)</h3>
+                        <div style="height: 280px;"><canvas id="revenueTrendChart"></canvas></div>
+                    </div>
+                </div>
+
+                <!-- Revenue Breakdown + Format -->
+                <div class="chart-row">
+                    <div class="chart-card">
+                        <h3>🎬 Revenue by Movie (Top 10)</h3>
+                        <div style="height: 280px;"><canvas id="revenueBreakdownChart"></canvas></div>
+                    </div>
+                    <div class="chart-card">
+                        <h3>🎞️ Revenue by Format</h3>
+                        <div style="height: 280px;"><canvas id="formatChart"></canvas></div>
+                    </div>
+                </div>
+
+                <!-- Movie Performance Table -->
+                <div class="admin-card">
+                    <h3>🎬 Movie Performance</h3>
+                    <div class="table-wrapper">
+                        <table class="analytics-table">
+                            <thead>
+                                <tr>
+                                    <th>Movie</th>
+                                    <th>Revenue</th>
+                                    <th>Tickets</th>
+                                    <th>Shows</th>
+                                    <th>Occupancy</th>
+                                    <th>Avg Price</th>
+                                    <th>Best Theatre</th>
+                                </tr>
+                            </thead>
+                            <tbody id="moviePerformanceBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Screen Performance Table -->
+                <div class="admin-card">
+                    <h3>📺 Screen Performance</h3>
+                    <div class="table-wrapper">
+                        <table class="analytics-table">
+                            <thead>
+                                <tr>
+                                    <th>Screen</th>
+                                    <th>Theatre</th>
+                                    <th>Revenue</th>
+                                    <th>Tickets</th>
+                                    <th>Shows</th>
+                                    <th>Occupancy</th>
+                                    <th>Rev/Show</th>
+                                    <th>Avg Price</th>
+                                </tr>
+                            </thead>
+                            <tbody id="screenPerformanceBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Show Performance Table -->
+                <div class="admin-card">
+                    <h3>🎬 Show Performance (Recent 50)</h3>
+                    <div class="table-wrapper">
+                        <table class="analytics-table">
+                            <thead>
+                                <tr>
+                                    <th>Movie</th>
+                                    <th>Theatre</th>
+                                    <th>Screen</th>
+                                    <th>Start Time</th>
+                                    <th>Format</th>
+                                    <th>Sold</th>
+                                    <th>Occupancy</th>
+                                    <th>Revenue</th>
+                                </tr>
+                            </thead>
+                            <tbody id="showPerformanceBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Time Slot & Day of Week Charts -->
+                <div class="chart-row">
+                    <div class="chart-card">
+                        <h3>🕐 Occupancy by Time of Day</h3>
+                        <div style="height: 250px;"><canvas id="timeSlotChart"></canvas></div>
+                    </div>
+                    <div class="chart-card">
+                        <h3>📅 Occupancy by Day of Week</h3>
+                        <div style="height: 250px;"><canvas id="dayOfWeekChart"></canvas></div>
+                    </div>
+                </div>
+
+                <!-- Language Performance -->
+                <div class="chart-row">
+                    <div class="chart-card">
+                        <h3>🌐 Revenue by Language</h3>
+                        <div style="height: 280px;"><canvas id="languageChart"></canvas></div>
+                    </div>
+                    <div class="chart-card">
+                        <h3>📅 Revenue by Day of Week</h3>
+                        <div style="height: 280px;"><canvas id="dayOfWeekRevenueChart"></canvas></div>
+                    </div>
+                </div>
+
+                <!-- Format & Language Tables -->
+                <div class="chart-row">
+                    <div class="admin-card">
+                        <h3>🎞️ Format Performance</h3>
+                        <div class="table-wrapper">
+                            <table class="analytics-table">
+                                <thead>
+                                    <tr>
+                                        <th>Format</th>
+                                        <th>Revenue</th>
+                                        <th>Tickets</th>
+                                        <th>Shows</th>
+                                        <th>Occupancy</th>
+                                        <th>Avg Price</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="formatPerformanceBody"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                    <div class="admin-card">
+                        <h3>🌐 Language Performance</h3>
+                        <div class="table-wrapper">
+                            <table class="analytics-table">
+                                <thead>
+                                    <tr>
+                                        <th>Language</th>
+                                        <th>Revenue</th>
+                                        <th>Tickets</th>
+                                        <th>Shows</th>
+                                        <th>Occupancy</th>
+                                        <th>Avg Price</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="languagePerformanceBody"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+            </section>
+
         </main>
     </div>
 
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="/js/analytics.js"></script>
     <script src="/owner.js"></script>
 </body>
 </html>

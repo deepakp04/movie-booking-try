@@ -108,6 +108,8 @@ async function withSubmitGuard(formEl, task) {
 }
 
 // Navigation Tab Switcher
+let analyticsInitialized = false;
+
 function switchTab(tabId) {
     document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
     document.querySelectorAll('.nav-tab').forEach(el => el.classList.remove('active'));
@@ -118,6 +120,17 @@ function switchTab(tabId) {
     }
     if (event && event.currentTarget) {
         event.currentTarget.classList.add('active');
+    }
+
+    // Initialize analytics on first visit
+    if (tabId === 'analyticsTab' && typeof initAnalytics === 'function' && !analyticsInitialized) {
+        analyticsInitialized = true;
+        // Set default dates
+        const dateFrom = document.getElementById('filterDateFrom');
+        const dateTo = document.getElementById('filterDateTo');
+        if (dateFrom) dateFrom.value = defaultDateFrom();
+        if (dateTo) dateTo.value = defaultDateTo();
+        initAnalytics();
     }
 }
 

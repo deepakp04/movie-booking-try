@@ -1,0 +1,209 @@
+/* ===== Analytics Module Styles ===== */
+
+/* KPI Cards */
+.kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 16px;
+    margin-bottom: 24px;
+}
+
+.kpi-card {
+    background: #1a1a2e;
+    border: 1px solid #2d2d44;
+    border-radius: 12px;
+    padding: 20px;
+    text-align: center;
+}
+
+.kpi-card .kpi-value {
+    font-size: 1.8rem;
+    font-weight: 700;
+    color: #e4e4e7;
+    margin: 8px 0 4px;
+}
+
+.kpi-card .kpi-label {
+    font-size: 0.8rem;
+    color: #71717a;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.kpi-card .kpi-icon {
+    font-size: 1.5rem;
+}
+
+/* Chart Containers */
+.chart-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin-bottom: 24px;
+}
+
+.chart-card {
+    background: #1a1a2e;
+    border: 1px solid #2d2d44;
+    border-radius: 12px;
+    padding: 20px;
+}
+
+.chart-card h3 {
+    margin: 0 0 16px 0;
+    color: #e4e4e7;
+    font-size: 1rem;
+}
+
+.chart-card canvas {
+    max-height: 300px;
+}
+
+/* Full-width chart */
+.chart-full {
+    grid-column: 1 / -1;
+}
+
+/* Filter Bar */
+.analytics-filters {
+    background: #1a1a2e;
+    border: 1px solid #2d2d44;
+    border-radius: 12px;
+    padding: 16px 20px;
+    margin-bottom: 24px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    align-items: flex-end;
+}
+
+.analytics-filters .filter-group {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.analytics-filters label {
+    font-size: 0.7rem;
+    color: #71717a;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.analytics-filters select,
+.analytics-filters input {
+    background: #27272a;
+    border: 1px solid #3f3f46;
+    border-radius: 6px;
+    color: #e4e4e7;
+    padding: 6px 10px;
+    font-size: 0.85rem;
+    min-width: 140px;
+}
+
+.analytics-filters select:focus,
+.analytics-filters input:focus {
+    outline: none;
+    border-color: #6c5ce7;
+}
+
+/* Analytics Data Table */
+.analytics-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.85rem;
+}
+
+.analytics-table th {
+    text-align: left;
+    padding: 10px 12px;
+    color: #71717a;
+    font-weight: 600;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    border-bottom: 1px solid #2d2d44;
+    cursor: pointer;
+    user-select: none;
+}
+
+.analytics-table th:hover {
+    color: #e4e4e7;
+}
+
+.analytics-table td {
+    padding: 10px 12px;
+    color: #e4e4e7;
+    border-bottom: 1px solid #1f1f2e;
+}
+
+.analytics-table tr:hover td {
+    background: rgba(108, 92, 231, 0.05);
+}
+
+/* Occupancy Bar */
+.occupancy-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.occupancy-bar .bar {
+    flex: 1;
+    height: 8px;
+    background: #27272a;
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.occupancy-bar .bar-fill {
+    height: 100%;
+    border-radius: 4px;
+    transition: width 0.3s ease;
+}
+
+.occupancy-bar .bar-text {
+    min-width: 45px;
+    text-align: right;
+    font-size: 0.8rem;
+    color: #a1a1aa;
+}
+
+/* Occupancy bar colors */
+.occupancy-bar .bar-fill.high { background: #22c55e; }
+.occupancy-bar .bar-fill.medium { background: #eab308; }
+.occupancy-bar .bar-fill.low { background: #ef4444; }
+
+/* Performance card for underperforming highlight */
+.underperforming {
+    border-color: #ef4444 !important;
+    background: rgba(239, 68, 68, 0.05) !important;
+}
+
+/* Tab content for analytics sub-sections */
+.analytics-section {
+    margin-bottom: 24px;
+}
+
+.analytics-section-title {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: #e4e4e7;
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .chart-row {
+        grid-template-columns: 1fr;
+    }
+    .kpi-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+    .analytics-filters {
+        flex-direction: column;
+    }
+}

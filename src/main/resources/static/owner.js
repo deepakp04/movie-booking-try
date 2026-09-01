@@ -75,6 +75,8 @@ async function ownerApiCall(endpoint, method = 'GET', body = null) {
     }
 }
 
+let analyticsInitialized = false;
+
 function switchTab(tabId) {
     document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
     document.querySelectorAll('.nav-tab').forEach(el => el.classList.remove('active'));
@@ -82,6 +84,16 @@ function switchTab(tabId) {
     const target = document.getElementById(tabId);
     if (target) target.classList.remove('hidden');
     if (event && event.currentTarget) event.currentTarget.classList.add('active');
+
+    // Initialize analytics on first visit
+    if (tabId === 'analyticsTab' && typeof initAnalytics === 'function' && !analyticsInitialized) {
+        analyticsInitialized = true;
+        const dateFrom = document.getElementById('filterDateFrom');
+        const dateTo = document.getElementById('filterDateTo');
+        if (dateFrom) dateFrom.value = defaultDateFrom();
+        if (dateTo) dateTo.value = defaultDateTo();
+        initAnalytics();
+    }
 }
 
 function showAlert(message, type = 'error') {
