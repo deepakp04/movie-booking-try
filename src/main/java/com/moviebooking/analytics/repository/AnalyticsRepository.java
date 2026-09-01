@@ -15,6 +15,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 
+//"?"
+
 /**
  * Native/JPQL aggregation queries for analytics.
  * All revenue comes from show_seats.price (immutable snapshot).
@@ -94,13 +96,13 @@ public class AnalyticsRepository {
 
         String sql = """
             SELECT
-                COALESCE(SUM(ss.price), 0) AS totalRevenue,
+                COALESCE(SUM(CASE WHEN ss.status = 'BOOKED' THEN ss.price ELSE 0 END), 0) AS totalRevenue,
                 COALESCE(SUM(CASE WHEN ss.status = 'BOOKED' THEN 1 ELSE 0 END), 0) AS ticketsSold,
                 COUNT(DISTINCT s.id) AS totalShows,
                 COUNT(DISTINCT s.screen_id) AS totalScreens,
                 COUNT(DISTINCT t.id) AS totalTheatres,
                 CASE WHEN SUM(CASE WHEN ss.status = 'BOOKED' THEN 1 ELSE 0 END) > 0
-                     THEN ROUND(SUM(ss.price) / SUM(CASE WHEN ss.status = 'BOOKED' THEN 1 ELSE 0 END), 2)
+                     THEN ROUND(SUM(CASE WHEN ss.status = 'BOOKED' THEN ss.price ELSE 0 END) / SUM(CASE WHEN ss.status = 'BOOKED' THEN 1 ELSE 0 END), 2)
                      ELSE 0 END AS avgTicketPrice,
                 CASE WHEN COUNT(ss.id) > 0
                      THEN ROUND(SUM(CASE WHEN ss.status = 'BOOKED' THEN 1 ELSE 0 END) * 100.0 / COUNT(ss.id), 1)
@@ -628,7 +630,7 @@ public class AnalyticsRepository {
         for (Object[] row : rows) {
             items.add(new DayOfWeekPerformance(
                 String.valueOf(row[0]),
-                toLong(row[1]).intValue(),
+                (int) toLong(row[1]),
                 toLong(row[2]),
                 toBigDecimal(row[3]),
                 toBigDecimal(row[4])
