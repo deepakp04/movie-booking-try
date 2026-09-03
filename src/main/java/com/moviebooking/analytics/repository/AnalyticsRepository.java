@@ -758,7 +758,7 @@ public class AnalyticsRepository {
             JOIN theatres t ON scr.theatre_id = t.id
             WHERE m.is_deleted = false AND s.is_deleted = false
               AND scr.is_deleted = false AND t.is_deleted = false
-              AND s.start_time < NOW()
+              
               """ + theatreFilter + """
             ORDER BY m.title
             """;
@@ -774,7 +774,7 @@ public class AnalyticsRepository {
             JOIN screens scr ON scr.theatre_id = t.id
             JOIN shows s ON s.screen_id = scr.id
             WHERE t.is_deleted = false AND scr.is_deleted = false AND s.is_deleted = false
-              AND s.start_time < NOW()
+              
               """ + theatreFilter + """
             ORDER BY t.name
             """;
@@ -790,7 +790,7 @@ public class AnalyticsRepository {
             JOIN theatres t ON scr.theatre_id = t.id
             JOIN shows s ON s.screen_id = scr.id
             WHERE scr.is_deleted = false AND t.is_deleted = false AND s.is_deleted = false
-              AND s.start_time < NOW()
+              
               """ + theatreFilter + """
             ORDER BY scr.name
             """;
@@ -808,7 +808,7 @@ public class AnalyticsRepository {
             JOIN shows s ON s.screen_id = scr.id
             WHERE c.is_deleted = false AND t.is_deleted = false
               AND scr.is_deleted = false AND s.is_deleted = false
-              AND s.start_time < NOW()
+              
               """ + (restrictToTheatreId != null
                   ? " AND t.id = " + restrictToTheatreId
                   : "") + """
