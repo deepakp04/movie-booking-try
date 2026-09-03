@@ -39,33 +39,34 @@ public class AnalyticsRepository {
         LocalDateTime fromDt = dateFrom.atStartOfDay();
         LocalDateTime toDt = dateTo.plusDays(1).atStartOfDay();
 
-        where.append(" AND ").append(showAlias).append(".start_time >= ?").append(params.size() + 1);
+        // Hibernate 6 native queries use plain ? (not ?1, ?2) for positional params
+        where.append(" AND ").append(showAlias).append(".start_time >= ?");
         params.add(fromDt);
-        where.append(" AND ").append(showAlias).append(".start_time < ?").append(params.size() + 1);
+        where.append(" AND ").append(showAlias).append(".start_time < ?");
         params.add(toDt);
 
         if (f.movieId() != null) {
-            where.append(" AND ").append(showAlias).append(".movie_id = ?").append(params.size() + 1);
+            where.append(" AND ").append(showAlias).append(".movie_id = ?");
             params.add(f.movieId());
         }
         if (f.theatreId() != null) {
-            where.append(" AND ").append(showAlias).append(".screen_id IN (SELECT scr.id FROM screens scr WHERE scr.theatre_id = ?").append(params.size() + 1).append(")");
+            where.append(" AND ").append(showAlias).append(".screen_id IN (SELECT scr.id FROM screens scr WHERE scr.theatre_id = ?)");
             params.add(f.theatreId());
         }
         if (f.screenId() != null) {
-            where.append(" AND ").append(showAlias).append(".screen_id = ?").append(params.size() + 1);
+            where.append(" AND ").append(showAlias).append(".screen_id = ?");
             params.add(f.screenId());
         }
         if (f.cityId() != null) {
-            where.append(" AND ").append(showAlias).append(".screen_id IN (SELECT scr.id FROM screens scr JOIN theatres t ON scr.theatre_id = t.id WHERE t.city_id = ?").append(params.size() + 1).append(")");
+            where.append(" AND ").append(showAlias).append(".screen_id IN (SELECT scr.id FROM screens scr JOIN theatres t ON scr.theatre_id = t.id WHERE t.city_id = ?)");
             params.add(f.cityId());
         }
         if (f.format() != null && !f.format().isBlank()) {
-            where.append(" AND ").append(showAlias).append(".format = ?").append(params.size() + 1);
+            where.append(" AND ").append(showAlias).append(".format = ?");
             params.add(f.format());
         }
         if (f.language() != null && !f.language().isBlank()) {
-            where.append(" AND ").append(showAlias).append(".language = ?").append(params.size() + 1);
+            where.append(" AND ").append(showAlias).append(".language = ?");
             params.add(f.language());
         }
 
