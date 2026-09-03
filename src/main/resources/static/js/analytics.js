@@ -125,19 +125,23 @@ function buildQueryString() {
 
 async function applyFilters() {
     collectFilters();
-    await Promise.all([
-        loadDashboard(),
-        loadRevenueTrend(),
-        loadRevenueBreakdown(),
-        loadMoviePerformance(),
-        loadTheatrePerformance(),
-        loadScreenPerformance(),
-        loadShowPerformance(),
-        loadTimeSlotPerformance(),
-        loadDayOfWeekPerformance(),
-        loadFormatPerformance(),
-        loadLanguagePerformance()
-    ]);
+    const tasks = [
+        ["Dashboard", loadDashboard()],
+        ["RevenueTrend", loadRevenueTrend()],
+        ["RevenueBreakdown", loadRevenueBreakdown()],
+        ["MoviePerformance", loadMoviePerformance()],
+        ["TheatrePerformance", loadTheatrePerformance()],
+        ["ScreenPerformance", loadScreenPerformance()],
+        ["ShowPerformance", loadShowPerformance()],
+        ["TimeSlot", loadTimeSlotPerformance()],
+        ["DayOfWeek", loadDayOfWeekPerformance()],
+        ["Format", loadFormatPerformance()],
+        ["Language", loadLanguagePerformance()]
+    ];
+    for (const [name, task] of tasks) {
+        try { await task; }
+        catch (err) { console.error("[ANALYTICS] " + name + " failed:", err); }
+    }
 }
 
 // ==================== API HELPER ====================
@@ -152,11 +156,23 @@ async function analyticsApiCall(endpoint) {
     });
 
     if (res.status === 401 || res.status === 403) {
+        console.warn(`[ANALYTICS] ${endpoint} returned ${res.status} — unauthorized`);
+        return null;
+    }
+
+    if (!res.ok) {
+        console.error(`[ANALYTICS] ${endpoint} returned HTTP ${res.status}`);
         return null;
     }
 
     const result = await res.json();
-    return result.success ? result.data : null;
+    if (!result.success) {
+        console.warn(`[ANALYTICS] ${endpoint} success=false:`, result);
+        return null;
+    }
+    console.log(`[ANALYTICS] ${endpoint} OK`, result.data);
+    return result.data;
+
 }
 
 // ==================== DASHBOARD ====================
