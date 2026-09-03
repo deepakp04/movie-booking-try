@@ -332,27 +332,32 @@ public class PaymentService {
      * This enables analytics revenue counting (which filters on ss.status = 'BOOKED').
      */
     private void confirmSeatsForBooking(Booking booking) {
-        String[] seatCodes = booking.getSeatCodes().split(",");
-        List<ShowSeat> heldSeats = showSeatRepository.findByBookingIdAndStatusForUpdate(
+        Long showId = booking.getShow().getId();
+        List<String> seatCodeList = List.of(booking.getSeatCodes().split(","));
+
+        // Case 1: Normal — seats still HELD (hold hasn't expired yet)
+        List<ShowSeat> seatsToUpdate = showSeatRepository.findByBookingIdAndStatusForUpdate(
             booking.getId(), SeatStatus.HELD);
 
-        for (ShowSeat seat : heldSeats) {
+        // Case 2: Hold expired — seats reverted to AVAILABLE, find by show_id + seat_code
+        if (seatsToUpdate.isEmpty()) {
+            List<ShowSeat> availableSeats = showSeatRepository
+                .findByShowIdAndSeatCodeIn(showId, seatCodeList);
+            seatsToUpdate = availableSeats.stream()
+                .filter(s -> s.getStatus() != SeatStatus.BOOKED)
+                .toList();
+        }
+
+        for (ShowSeat seat : seatsToUpdate) {
             seat.setStatus(SeatStatus.BOOKED);
             seat.setBookingId(booking.getId());
-            // Broadcast real-time update via SSE
             seatStreamService.broadcastSeatUpdate(
-                booking.getShow().getId(),
-                new SeatUpdateEvent(
-                    booking.getShow().getId(),
-                    seat.getSeatCode(),
-                    "BOOKED",
-                    null, null,
-                    "CONFIRMED",
-                    null
-                )
+                showId,
+                new SeatUpdateEvent(showId, seat.getSeatCode(), "BOOKED",
+                    null, null, "CONFIRMED", null)
             );
         }
-        showSeatRepository.saveAll(heldSeats);
+        showSeatRepository.saveAll(seatsToUpdate);
     }
 
     /**

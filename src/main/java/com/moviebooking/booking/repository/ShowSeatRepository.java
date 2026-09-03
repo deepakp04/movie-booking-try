@@ -51,4 +51,12 @@ public interface ShowSeatRepository extends JpaRepository<ShowSeat, Long> {
         @Param("bookingId") Long bookingId,
         @Param("status") com.moviebooking.booking.model.SeatStatus status
     );
+
+    // Find seats by show_id and seat_code list (for confirming seats after hold expiry)
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT s FROM ShowSeat s WHERE s.show.id = :showId AND s.seatCode IN :seatCodes")
+    List<ShowSeat> findByShowIdAndSeatCodeIn(
+        @Param("showId") Long showId,
+        @Param("seatCodes") List<String> seatCodes
+    );
 }
