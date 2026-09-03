@@ -612,7 +612,7 @@ async function fetchAndRenderSeats(showId) {
                     el.style.boxShadow = `inset 0 -3px 0 ${cell.tierColorHex}`;
                 }
                 el.title = taken
-                    ? `${cell.seatCode} - unavailable`
+                    ? `${cell.seatCode} - sold`
                     : (heldByMe 
                         ? `${cell.seatCode} - Held by you (expires in countdown)`
                         : `${cell.seatCode}${cell.tierName ? ' - ' + cell.tierName : ''} - ₹${cell.price}`);
