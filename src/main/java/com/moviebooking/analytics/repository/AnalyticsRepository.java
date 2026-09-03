@@ -487,7 +487,7 @@ public class AnalyticsRepository {
                 String.valueOf(row[1]),
                 String.valueOf(row[2]),
                 String.valueOf(row[3]),
-                row[4] instanceof LocalDateTime ldt ? ldt : LocalDateTime.parse(String.valueOf(row[4])),
+                toLocalDateTime(row[4]),
                 String.valueOf(row[5]),
                 String.valueOf(row[6]),
                 toLong(row[7]),
@@ -798,5 +798,17 @@ public class AnalyticsRepository {
         if (val instanceof Number n) return n.longValue();
         try { return Long.parseLong(String.valueOf(val)); }
         catch (Exception e) { return null; }
+    }
+
+
+    private static LocalDateTime toLocalDateTime(Object val) {
+        if (val instanceof LocalDateTime ldt) return ldt;
+        if (val instanceof java.sql.Timestamp ts) return ts.toLocalDateTime();
+        if (val instanceof java.util.Date d) {
+            return d.toInstant().atZone(java.time.ZoneId.systemDefault()).toLocalDateTime();
+        }
+        // Fallback: parse string, strip fractional seconds and replace space with T
+        String s = String.valueOf(val).replaceAll("\\..*", "").replace(" ", "T");
+        return LocalDateTime.parse(s);
     }
 }
