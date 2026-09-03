@@ -2,7 +2,10 @@ package com.moviebooking.payment.service;
 
 import com.moviebooking.booking.model.Booking;
 import com.moviebooking.booking.model.BookingStatus;
+import com.moviebooking.booking.model.SeatStatus;
+import com.moviebooking.booking.model.ShowSeat;
 import com.moviebooking.booking.repository.BookingRepository;
+import com.moviebooking.booking.repository.ShowSeatRepository;
 import com.moviebooking.common.exception.BusinessException;
 import com.moviebooking.common.exception.ResourceNotFoundException;
 import com.moviebooking.payment.dto.CreateOrderRequest;
@@ -45,13 +48,16 @@ public class PaymentService {
 
     private final PaymentTransactionRepository paymentRepository;
     private final BookingRepository bookingRepository;
+    private final ShowSeatRepository showSeatRepository;
     private final SeatStreamService seatStreamService;
 
     public PaymentService(PaymentTransactionRepository paymentRepository,
                          BookingRepository bookingRepository,
+                         ShowSeatRepository showSeatRepository,
                          SeatStreamService seatStreamService) {
         this.paymentRepository = paymentRepository;
         this.bookingRepository = bookingRepository;
+        this.showSeatRepository = showSeatRepository;
         this.seatStreamService = seatStreamService;
     }
 
@@ -167,6 +173,10 @@ public class PaymentService {
                 && LocalDateTime.now().isBefore(booking.getHoldExpiresAt())) {
             booking.setStatus(BookingStatus.CONFIRMED);
             bookingRepository.save(booking);
+            
+            // Mark HELD seats as BOOKED so analytics revenue counting works
+            confirmSeatsForBooking(booking);
+            
             log.info("Payment verified successfully. Booking {} confirmed.", booking.getId());
             
             return new PaymentResponse(
@@ -243,6 +253,7 @@ public class PaymentService {
                 paymentRepository.save(transaction);
                 booking.setStatus(BookingStatus.CONFIRMED);
                 bookingRepository.save(booking);
+                confirmSeatsForBooking(booking);
                 log.info("Booking {} confirmed via webhook", booking.getId());
             } else if (booking.getStatus() == BookingStatus.CONFIRMED) {
                 // Already confirmed (idempotent — callback arrived first)
@@ -314,6 +325,34 @@ public class PaymentService {
             log.error("Error creating Razorpay order", e);
             throw new BusinessException("Unable to connect to payment gateway. Please try again.");
         }
+    }
+
+    /**
+     * Transition HELD seats to BOOKED after payment confirmation.
+     * This enables analytics revenue counting (which filters on ss.status = 'BOOKED').
+     */
+    private void confirmSeatsForBooking(Booking booking) {
+        String[] seatCodes = booking.getSeatCodes().split(",");
+        List<ShowSeat> heldSeats = showSeatRepository.findByBookingIdAndStatusForUpdate(
+            booking.getId(), SeatStatus.HELD);
+
+        for (ShowSeat seat : heldSeats) {
+            seat.setStatus(SeatStatus.BOOKED);
+            seat.setBookingId(booking.getId());
+            // Broadcast real-time update via SSE
+            seatStreamService.broadcastSeatUpdate(
+                booking.getShow().getId(),
+                new SeatUpdateEvent(
+                    booking.getShow().getId(),
+                    seat.getSeatCode(),
+                    "BOOKED",
+                    null, null,
+                    "CONFIRMED",
+                    null
+                )
+            );
+        }
+        showSeatRepository.saveAll(heldSeats);
     }
 
     /**

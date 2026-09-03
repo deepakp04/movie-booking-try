@@ -39,6 +39,8 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ErrorResponse> handleGenericException(
             Exception ex) {
 
+        log.error("Unhandled exception: {}", ex.getMessage(), ex);
+
         ErrorResponse response =
                 new ErrorResponse(
                         false,

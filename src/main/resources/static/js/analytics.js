@@ -162,7 +162,8 @@ async function analyticsApiCall(endpoint) {
     }
 
     if (!res.ok) {
-        console.error(`[ANALYTICS] ${endpoint} returned HTTP ${res.status}`);
+        const errBody = await res.text();
+        console.error(`[ANALYTICS] ${endpoint} returned HTTP ${res.status}:`, errBody);
         return null;
     }
 
