@@ -10,17 +10,15 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.time.format.TextStyle;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Locale;
 
 //"?"
 
 /**
- * Native/JPQL aggregation queries for analytics.
+ * Native aggregation queries for analytics.
  * All revenue comes from show_seats.price (immutable snapshot).
- * No entity loading — returns DTO projections only.
+ * No entity loading — returns scalar results only.
  */
 @Repository
 public class AnalyticsRepository {
@@ -30,14 +28,6 @@ public class AnalyticsRepository {
 
     // ==================== SHARED FILTER CLAUSE ====================
 
-    /**
-     * Builds the common WHERE clause for filtering analytics queries.
-     * All joins go through show → screen → theatre with isDeleted checks.
-     * Revenue filter: show_seats.status = 'BOOKED'.
-     *
-     * The returned string starts with "WHERE" so callers append after a
-     * suitable FROM ... JOIN clause.
-     */
     private record FilterClause(String sql, List<Object> params) {}
 
     private FilterClause buildFilter(AnalyticsFilter f, String showAlias) {
@@ -47,7 +37,7 @@ public class AnalyticsRepository {
         LocalDate dateFrom = f.effectiveDateFrom();
         LocalDate dateTo = f.effectiveDateTo();
         LocalDateTime fromDt = dateFrom.atStartOfDay();
-        LocalDateTime toDt = dateTo.plusDays(1).atStartOfDay(); // exclusive end
+        LocalDateTime toDt = dateTo.plusDays(1).atStartOfDay();
 
         where.append(" AND ").append(showAlias).append(".start_time >= ?").append(params.size() + 1);
         params.add(fromDt);
@@ -82,10 +72,17 @@ public class AnalyticsRepository {
         return new FilterClause(where.toString(), params);
     }
 
-    /** Extra scoping clause for owner: restrict to their theatre. */
     private String theatreScopeClause(Long restrictToTheatreId) {
         if (restrictToTheatreId == null) return "";
         return " AND s.screen_id IN (SELECT scr.id FROM screens scr WHERE scr.theatre_id = " + restrictToTheatreId + ")";
+    }
+
+    private jakarta.persistence.Query createQuery(String sql, FilterClause fc) {
+        var query = em.createNativeQuery(sql);
+        for (int i = 0; i < fc.params().size(); i++) {
+            query.setParameter(i + 1, fc.params().get(i));
+        }
+        return query;
     }
 
     // ==================== DASHBOARD KPIs ====================
@@ -99,15 +96,13 @@ public class AnalyticsRepository {
                 COALESCE(SUM(CASE WHEN ss.status = 'BOOKED' THEN ss.price ELSE 0 END), 0) AS totalRevenue,
                 COALESCE(SUM(CASE WHEN ss.status = 'BOOKED' THEN 1 ELSE 0 END), 0) AS ticketsSold,
                 COUNT(DISTINCT s.id) AS totalShows,
-                COUNT(DISTINCT s.screen_id) AS totalScreens,
                 COUNT(DISTINCT t.id) AS totalTheatres,
                 CASE WHEN SUM(CASE WHEN ss.status = 'BOOKED' THEN 1 ELSE 0 END) > 0
                      THEN ROUND(SUM(CASE WHEN ss.status = 'BOOKED' THEN ss.price ELSE 0 END) / SUM(CASE WHEN ss.status = 'BOOKED' THEN 1 ELSE 0 END), 2)
                      ELSE 0 END AS avgTicketPrice,
                 CASE WHEN COUNT(ss.id) > 0
                      THEN ROUND(SUM(CASE WHEN ss.status = 'BOOKED' THEN 1 ELSE 0 END) * 100.0 / COUNT(ss.id), 1)
-                     ELSE 0 END AS avgOccupancyPct,
-                COUNT(DISTINCT s.id) AS totalShowsForRevenue
+                     ELSE 0 END AS avgOccupancyPct
             FROM show_seats ss
             JOIN shows s ON ss.show_id = s.id
             JOIN screens scr ON s.screen_id = scr.id
@@ -115,21 +110,16 @@ public class AnalyticsRepository {
             WHERE s.is_deleted = false
               AND scr.is_deleted = false
               AND t.is_deleted = false
-              """ + scope + fc.sql();
+            """ + scope + fc.sql();
 
-        var query = em.createNativeQuery(sql);
-        for (int i = 0; i < fc.params().size(); i++) {
-            query.setParameter(i + 1, fc.params().get(i));
-        }
-
-        Object[] row = (Object[]) query.getSingleResult();
+        Object[] row = (Object[]) createQuery(sql, fc).getSingleResult();
 
         BigDecimal totalRevenue = toBigDecimal(row[0]);
         long ticketsSold = toLong(row[1]);
         long totalShows = toLong(row[2]);
-        long totalTheatres = toLong(row[4]);
-        BigDecimal avgTicketPrice = toBigDecimal(row[5]);
-        BigDecimal avgOccupancy = toBigDecimal(row[6]);
+        long totalTheatres = toLong(row[3]);
+        BigDecimal avgTicketPrice = toBigDecimal(row[4]);
+        BigDecimal avgOccupancy = toBigDecimal(row[5]);
 
         BigDecimal revenuePerShow = totalShows > 0
             ? totalRevenue.divide(BigDecimal.valueOf(totalShows), 2, RoundingMode.HALF_UP)
@@ -151,31 +141,24 @@ public class AnalyticsRepository {
         switch (granularity != null ? granularity.toLowerCase() : "daily") {
             case "weekly" -> dateFormat = "YEARWEEK(s.start_time, 1)";
             case "monthly" -> dateFormat = "DATE_FORMAT(s.start_time, '%Y-%m')";
-            default -> dateFormat = "DATE(s.start_time)"; // daily
+            default -> dateFormat = "DATE(s.start_time)";
         }
 
-        String sql = """
-            SELECT
-                %s AS period,
-                COALESCE(SUM(CASE WHEN ss.status = 'BOOKED' THEN ss.price ELSE 0 END), 0) AS revenue
-            FROM show_seats ss
-            JOIN shows s ON ss.show_id = s.id
-            JOIN screens scr ON s.screen_id = scr.id
-            JOIN theatres t ON scr.theatre_id = t.id
-            WHERE s.is_deleted = false
-              AND scr.is_deleted = false
-              AND t.is_deleted = false
-              """ + scope + fc.sql() + """
-            GROUP BY period
-            ORDER BY period
-            """.formatted(dateFormat);
+        // Use string concat — NOT .formatted() on text block, which has operator precedence issues
+        String sql = "SELECT "
+            + dateFormat + " AS period, "
+            + "COALESCE(SUM(CASE WHEN ss.status = 'BOOKED' THEN ss.price ELSE 0 END), 0) AS revenue "
+            + "FROM show_seats ss "
+            + "JOIN shows s ON ss.show_id = s.id "
+            + "JOIN screens scr ON s.screen_id = scr.id "
+            + "JOIN theatres t ON scr.theatre_id = t.id "
+            + "WHERE s.is_deleted = false "
+            + "AND scr.is_deleted = false "
+            + "AND t.is_deleted = false "
+            + scope + fc.sql()
+            + " GROUP BY period ORDER BY period";
 
-        var query = em.createNativeQuery(sql);
-        for (int i = 0; i < fc.params().size(); i++) {
-            query.setParameter(i + 1, fc.params().get(i));
-        }
-
-        List<Object[]> rows = query.getResultList();
+        List<Object[]> rows = createQuery(sql, fc).getResultList();
         List<String> labels = new ArrayList<>();
         List<BigDecimal> values = new ArrayList<>();
 
@@ -193,70 +176,69 @@ public class AnalyticsRepository {
         String scope = theatreScopeClause(restrictToTheatreId);
         FilterClause fc = buildFilter(filter, "s");
 
-        String groupSelect, joinClause;
+        // Build SELECT, GROUP BY, and optional extra JOINs per dimension
+        String dimSelect, dimGroup, extraJoin;
         switch (dimension.toLowerCase()) {
             case "movie" -> {
-                groupSelect = "m.id, m.title";
-                joinClause = "JOIN movies m ON s.movie_id = m.id AND m.is_deleted = false";
+                dimSelect = "m.id, m.title";
+                dimGroup = "m.id, m.title";
+                extraJoin = "JOIN movies m ON s.movie_id = m.id AND m.is_deleted = false";
             }
             case "theatre" -> {
-                groupSelect = "t.id, t.name";
-                joinClause = "JOIN screens scr2 ON s.screen_id = scr2.id JOIN theatres t ON scr2.theatre_id = t.id AND t.is_deleted = false";
-                // Remove the redundant theatre join from scope
-                scope = "";
+                dimSelect = "th.id, th.name";
+                dimGroup = "th.id, th.name";
+                extraJoin = "JOIN screens scr2 ON s.screen_id = scr2.id JOIN theatres th ON scr2.theatre_id = th.id AND th.is_deleted = false";
+                scope = ""; // avoid double-join with base theatres t
             }
             case "screen" -> {
-                groupSelect = "scr.id, scr.name";
-                joinClause = "";
+                dimSelect = "scr.id, scr.name";
+                dimGroup = "scr.id, scr.name";
+                extraJoin = "";
             }
             case "city" -> {
-                groupSelect = "c.id, c.name";
-                joinClause = "JOIN screens scr3 ON s.screen_id = scr3.id JOIN theatres t3 ON scr3.theatre_id = t3.id JOIN cities c ON t3.city_id = c.id";
+                dimSelect = "c.id, c.name";
+                dimGroup = "c.id, c.name";
+                extraJoin = "JOIN screens scr3 ON s.screen_id = scr3.id JOIN theatres t3 ON scr3.theatre_id = t3.id JOIN cities c ON t3.city_id = c.id";
                 scope = "";
             }
             case "format" -> {
-                groupSelect = "CAST(s.format AS CHAR), s.format";
-                joinClause = "";
+                dimSelect = "s.format AS dimId, s.format AS dimName";
+                dimGroup = "s.format";
+                extraJoin = "";
             }
             case "language" -> {
-                groupSelect = "CAST(s.language AS CHAR), s.language";
-                joinClause = "";
+                dimSelect = "s.language AS dimId, s.language AS dimName";
+                dimGroup = "s.language";
+                extraJoin = "";
             }
             default -> throw new IllegalArgumentException("Unknown dimension: " + dimension);
         }
 
-        String sql = """
-            SELECT
-                %s AS dimId,
-                %s AS dimName,
-                COALESCE(SUM(CASE WHEN ss.status = 'BOOKED' THEN ss.price ELSE 0 END), 0) AS revenue,
-                SUM(CASE WHEN ss.status = 'BOOKED' THEN 1 ELSE 0 END) AS ticketsSold,
-                COUNT(DISTINCT s.id) AS showCount,
-                CASE WHEN COUNT(ss.id) > 0
-                     THEN ROUND(SUM(CASE WHEN ss.status = 'BOOKED' THEN 1 ELSE 0 END) * 100.0 / COUNT(ss.id), 1)
-                     ELSE 0 END AS occupancyPct,
-                CASE WHEN SUM(CASE WHEN ss.status = 'BOOKED' THEN 1 ELSE 0 END) > 0
-                     THEN ROUND(SUM(CASE WHEN ss.status = 'BOOKED' THEN ss.price ELSE 0 END) / SUM(CASE WHEN ss.status = 'BOOKED' THEN 1 ELSE 0 END), 2)
-                     ELSE 0 END AS avgTicketPrice
-            FROM show_seats ss
-            JOIN shows s ON ss.show_id = s.id
-            JOIN screens scr ON s.screen_id = scr.id
-            JOIN theatres t ON scr.theatre_id = t.id
-            %s
-            WHERE s.is_deleted = false
-              AND scr.is_deleted = false
-              AND t.is_deleted = false
-              """ + scope + fc.sql() + """
-            GROUP BY %s, %s
-            ORDER BY revenue DESC
-            """.formatted(groupSelect, groupSelect, joinClause, groupSelect, groupSelect);
+        // Plain string concat — avoids .formatted() operator precedence bug
+        String sql = "SELECT "
+            + dimSelect + ", "
+            + "COALESCE(SUM(CASE WHEN ss.status = 'BOOKED' THEN ss.price ELSE 0 END), 0) AS revenue, "
+            + "SUM(CASE WHEN ss.status = 'BOOKED' THEN 1 ELSE 0 END) AS ticketsSold, "
+            + "COUNT(DISTINCT s.id) AS showCount, "
+            + "CASE WHEN COUNT(ss.id) > 0 "
+            + "THEN ROUND(SUM(CASE WHEN ss.status = 'BOOKED' THEN 1 ELSE 0 END) * 100.0 / COUNT(ss.id), 1) "
+            + "ELSE 0 END AS occupancyPct, "
+            + "CASE WHEN SUM(CASE WHEN ss.status = 'BOOKED' THEN 1 ELSE 0 END) > 0 "
+            + "THEN ROUND(SUM(CASE WHEN ss.status = 'BOOKED' THEN ss.price ELSE 0 END) / SUM(CASE WHEN ss.status = 'BOOKED' THEN 1 ELSE 0 END), 2) "
+            + "ELSE 0 END AS avgTicketPrice "
+            + "FROM show_seats ss "
+            + "JOIN shows s ON ss.show_id = s.id "
+            + "JOIN screens scr ON s.screen_id = scr.id "
+            + "JOIN theatres t ON scr.theatre_id = t.id "
+            + extraJoin + " "
+            + "WHERE s.is_deleted = false "
+            + "AND scr.is_deleted = false "
+            + "AND t.is_deleted = false "
+            + scope + fc.sql()
+            + " GROUP BY " + dimGroup
+            + " ORDER BY revenue DESC";
 
-        var query = em.createNativeQuery(sql);
-        for (int i = 0; i < fc.params().size(); i++) {
-            query.setParameter(i + 1, fc.params().get(i));
-        }
-
-        List<Object[]> rows = query.getResultList();
+        List<Object[]> rows = createQuery(sql, fc).getResultList();
         List<DimensionBreakdownItem> items = new ArrayList<>();
 
         for (Object[] row : rows) {
@@ -293,17 +275,19 @@ public class AnalyticsRepository {
                 CASE WHEN SUM(CASE WHEN ss.status = 'BOOKED' THEN 1 ELSE 0 END) > 0
                      THEN ROUND(SUM(CASE WHEN ss.status = 'BOOKED' THEN ss.price ELSE 0 END) / SUM(CASE WHEN ss.status = 'BOOKED' THEN 1 ELSE 0 END), 2)
                      ELSE 0 END AS avgTicketPrice,
-                (SELECT t2.name FROM theatres t2
-                 JOIN screens scr2 ON scr2.theatre_id = t2.id
-                 JOIN shows s2 ON s2.screen_id = scr2.id
-                 JOIN show_seats ss2 ON ss2.show_id = s2.id
-                 WHERE s2.movie_id = m.id
-                   AND ss2.status = 'BOOKED'
-                   AND s2.is_deleted = false
-                   AND t2.is_deleted = false
-                 GROUP BY t2.id, t2.name
-                 ORDER BY SUM(CASE WHEN ss2.status = 'BOOKED' THEN ss2.price ELSE 0 END) DESC
-                 LIMIT 1) AS bestTheatre
+                COALESCE((
+                    SELECT t2.name FROM theatres t2
+                    JOIN screens scr2 ON scr2.theatre_id = t2.id
+                    JOIN shows s2 ON s2.screen_id = scr2.id
+                    JOIN show_seats ss2 ON ss2.show_id = s2.id
+                    WHERE s2.movie_id = m.id
+                      AND ss2.status = 'BOOKED'
+                      AND s2.is_deleted = false
+                      AND t2.is_deleted = false
+                    GROUP BY t2.id, t2.name
+                    ORDER BY SUM(CASE WHEN ss2.status = 'BOOKED' THEN ss2.price ELSE 0 END) DESC
+                    LIMIT 1
+                ), 'N/A') AS bestTheatre
             FROM show_seats ss
             JOIN shows s ON ss.show_id = s.id
             JOIN screens scr ON s.screen_id = scr.id
@@ -313,17 +297,12 @@ public class AnalyticsRepository {
               AND scr.is_deleted = false
               AND t.is_deleted = false
               AND m.is_deleted = false
-              """ + scope + fc.sql() + """
+            """ + scope + fc.sql() + """
             GROUP BY m.id, m.title
             ORDER BY revenue DESC
             """;
 
-        var query = em.createNativeQuery(sql);
-        for (int i = 0; i < fc.params().size(); i++) {
-            query.setParameter(i + 1, fc.params().get(i));
-        }
-
-        List<Object[]> rows = query.getResultList();
+        List<Object[]> rows = createQuery(sql, fc).getResultList();
         List<MoviePerformanceItem> items = new ArrayList<>();
 
         for (Object[] row : rows) {
@@ -374,17 +353,12 @@ public class AnalyticsRepository {
               AND scr.is_deleted = false
               AND t.is_deleted = false
               AND c.is_deleted = false
-              """ + scope + fc.sql() + """
+            """ + scope + fc.sql() + """
             GROUP BY t.id, t.name, c.name
             ORDER BY revenue DESC
             """;
 
-        var query = em.createNativeQuery(sql);
-        for (int i = 0; i < fc.params().size(); i++) {
-            query.setParameter(i + 1, fc.params().get(i));
-        }
-
-        List<Object[]> rows = query.getResultList();
+        List<Object[]> rows = createQuery(sql, fc).getResultList();
         List<TheatrePerformanceItem> items = new ArrayList<>();
 
         for (Object[] row : rows) {
@@ -438,17 +412,12 @@ public class AnalyticsRepository {
             WHERE s.is_deleted = false
               AND scr.is_deleted = false
               AND t.is_deleted = false
-              """ + scope + fc.sql() + """
+            """ + scope + fc.sql() + """
             GROUP BY scr.id, scr.name, t.name
             ORDER BY revenue DESC
             """;
 
-        var query = em.createNativeQuery(sql);
-        for (int i = 0; i < fc.params().size(); i++) {
-            query.setParameter(i + 1, fc.params().get(i));
-        }
-
-        List<Object[]> rows = query.getResultList();
+        List<Object[]> rows = createQuery(sql, fc).getResultList();
         List<ScreenPerformanceItem> items = new ArrayList<>();
 
         for (Object[] row : rows) {
@@ -483,8 +452,8 @@ public class AnalyticsRepository {
                 t.name AS theatreName,
                 scr.name AS screenName,
                 s.start_time AS startTime,
-                CAST(s.format AS CHAR) AS format,
-                CAST(s.language AS CHAR) AS language,
+                s.format AS format,
+                s.language AS language,
                 SUM(CASE WHEN ss.status = 'BOOKED' THEN 1 ELSE 0 END) AS ticketsSold,
                 COUNT(ss.id) AS totalSeats,
                 CASE WHEN COUNT(ss.id) > 0
@@ -503,17 +472,12 @@ public class AnalyticsRepository {
               AND scr.is_deleted = false
               AND t.is_deleted = false
               AND m.is_deleted = false
-              """ + scope + fc.sql() + """
+            """ + scope + fc.sql() + """
             GROUP BY s.id, m.title, t.name, scr.name, s.start_time, s.format, s.language
             ORDER BY s.start_time DESC
             """;
 
-        var query = em.createNativeQuery(sql);
-        for (int i = 0; i < fc.params().size(); i++) {
-            query.setParameter(i + 1, fc.params().get(i));
-        }
-
-        List<Object[]> rows = query.getResultList();
+        List<Object[]> rows = createQuery(sql, fc).getResultList();
         List<ShowPerformanceItem> items = new ArrayList<>();
 
         for (Object[] row : rows) {
@@ -562,7 +526,7 @@ public class AnalyticsRepository {
             WHERE s.is_deleted = false
               AND scr.is_deleted = false
               AND t.is_deleted = false
-              """ + scope + fc.sql() + """
+            """ + scope + fc.sql() + """
             GROUP BY slot
             ORDER BY CASE slot
                 WHEN 'Morning (5AM-12PM)' THEN 1
@@ -572,12 +536,7 @@ public class AnalyticsRepository {
             END
             """;
 
-        var query = em.createNativeQuery(sql);
-        for (int i = 0; i < fc.params().size(); i++) {
-            query.setParameter(i + 1, fc.params().get(i));
-        }
-
-        List<Object[]> rows = query.getResultList();
+        List<Object[]> rows = createQuery(sql, fc).getResultList();
         List<TimeSlotPerformance> items = new ArrayList<>();
 
         for (Object[] row : rows) {
@@ -614,17 +573,12 @@ public class AnalyticsRepository {
             WHERE s.is_deleted = false
               AND scr.is_deleted = false
               AND t.is_deleted = false
-              """ + scope + fc.sql() + """
+            """ + scope + fc.sql() + """
             GROUP BY dayName, dayOrder
             ORDER BY dayOrder
             """;
 
-        var query = em.createNativeQuery(sql);
-        for (int i = 0; i < fc.params().size(); i++) {
-            query.setParameter(i + 1, fc.params().get(i));
-        }
-
-        List<Object[]> rows = query.getResultList();
+        List<Object[]> rows = createQuery(sql, fc).getResultList();
         List<DayOfWeekPerformance> items = new ArrayList<>();
 
         for (Object[] row : rows) {
@@ -648,7 +602,7 @@ public class AnalyticsRepository {
 
         String sql = """
             SELECT
-                CAST(s.format AS CHAR) AS format,
+                s.format AS format,
                 COALESCE(SUM(CASE WHEN ss.status = 'BOOKED' THEN ss.price ELSE 0 END), 0) AS revenue,
                 SUM(CASE WHEN ss.status = 'BOOKED' THEN 1 ELSE 0 END) AS ticketsSold,
                 COUNT(DISTINCT s.id) AS showCount,
@@ -665,17 +619,12 @@ public class AnalyticsRepository {
             WHERE s.is_deleted = false
               AND scr.is_deleted = false
               AND t.is_deleted = false
-              """ + scope + fc.sql() + """
+            """ + scope + fc.sql() + """
             GROUP BY s.format
             ORDER BY revenue DESC
             """;
 
-        var query = em.createNativeQuery(sql);
-        for (int i = 0; i < fc.params().size(); i++) {
-            query.setParameter(i + 1, fc.params().get(i));
-        }
-
-        List<Object[]> rows = query.getResultList();
+        List<Object[]> rows = createQuery(sql, fc).getResultList();
         List<FormatPerformanceItem> items = new ArrayList<>();
 
         for (Object[] row : rows) {
@@ -700,7 +649,7 @@ public class AnalyticsRepository {
 
         String sql = """
             SELECT
-                CAST(s.language AS CHAR) AS language,
+                s.language AS language,
                 COALESCE(SUM(CASE WHEN ss.status = 'BOOKED' THEN ss.price ELSE 0 END), 0) AS revenue,
                 SUM(CASE WHEN ss.status = 'BOOKED' THEN 1 ELSE 0 END) AS ticketsSold,
                 COUNT(DISTINCT s.id) AS showCount,
@@ -717,17 +666,12 @@ public class AnalyticsRepository {
             WHERE s.is_deleted = false
               AND scr.is_deleted = false
               AND t.is_deleted = false
-              """ + scope + fc.sql() + """
+            """ + scope + fc.sql() + """
             GROUP BY s.language
             ORDER BY revenue DESC
             """;
 
-        var query = em.createNativeQuery(sql);
-        for (int i = 0; i < fc.params().size(); i++) {
-            query.setParameter(i + 1, fc.params().get(i));
-        }
-
-        List<Object[]> rows = query.getResultList();
+        List<Object[]> rows = createQuery(sql, fc).getResultList();
         List<LanguagePerformanceItem> items = new ArrayList<>();
 
         for (Object[] row : rows) {
@@ -751,7 +695,6 @@ public class AnalyticsRepository {
             ? " AND t.id = " + restrictToTheatreId
             : "";
 
-        // Movies with confirmed shows
         String movieSql = """
             SELECT DISTINCT m.id, m.title
             FROM movies m
@@ -760,8 +703,7 @@ public class AnalyticsRepository {
             JOIN theatres t ON scr.theatre_id = t.id
             WHERE m.is_deleted = false AND s.is_deleted = false
               AND scr.is_deleted = false AND t.is_deleted = false
-              
-              """ + theatreFilter + """
+            """ + theatreFilter + """
             ORDER BY m.title
             """;
         List<Object[]> movieRows = em.createNativeQuery(movieSql).getResultList();
@@ -769,15 +711,13 @@ public class AnalyticsRepository {
             .map(r -> new FilterOption(toLong(r[0]), String.valueOf(r[1])))
             .toList();
 
-        // Theatres
         String theatreSql = """
             SELECT DISTINCT t.id, t.name
             FROM theatres t
             JOIN screens scr ON scr.theatre_id = t.id
             JOIN shows s ON s.screen_id = scr.id
             WHERE t.is_deleted = false AND scr.is_deleted = false AND s.is_deleted = false
-              
-              """ + theatreFilter + """
+            """ + theatreFilter + """
             ORDER BY t.name
             """;
         List<Object[]> theatreRows = em.createNativeQuery(theatreSql).getResultList();
@@ -785,15 +725,13 @@ public class AnalyticsRepository {
             .map(r -> new FilterOption(toLong(r[0]), String.valueOf(r[1])))
             .toList();
 
-        // Screens
         String screenSql = """
             SELECT DISTINCT scr.id, scr.name
             FROM screens scr
             JOIN theatres t ON scr.theatre_id = t.id
             JOIN shows s ON s.screen_id = scr.id
             WHERE scr.is_deleted = false AND t.is_deleted = false AND s.is_deleted = false
-              
-              """ + theatreFilter + """
+            """ + theatreFilter + """
             ORDER BY scr.name
             """;
         List<Object[]> screenRows = em.createNativeQuery(screenSql).getResultList();
@@ -801,7 +739,6 @@ public class AnalyticsRepository {
             .map(r -> new FilterOption(toLong(r[0]), String.valueOf(r[1])))
             .toList();
 
-        // Cities
         String citySql = """
             SELECT DISTINCT c.id, c.name
             FROM cities c
@@ -810,10 +747,7 @@ public class AnalyticsRepository {
             JOIN shows s ON s.screen_id = scr.id
             WHERE c.is_deleted = false AND t.is_deleted = false
               AND scr.is_deleted = false AND s.is_deleted = false
-              
-              """ + (restrictToTheatreId != null
-                  ? " AND t.id = " + restrictToTheatreId
-                  : "") + """
+            """ + (restrictToTheatreId != null ? " AND t.id = " + restrictToTheatreId : "") + """
             ORDER BY c.name
             """;
         List<Object[]> cityRows = em.createNativeQuery(citySql).getResultList();
@@ -821,7 +755,6 @@ public class AnalyticsRepository {
             .map(r -> new FilterOption(toLong(r[0]), String.valueOf(r[1])))
             .toList();
 
-        // Formats (enum values)
         List<FilterOption> formats = List.of(
             new FilterOption(null, "TWO_D"),
             new FilterOption(null, "THREE_D"),
@@ -830,7 +763,6 @@ public class AnalyticsRepository {
             new FilterOption(null, "FOUR_DX")
         );
 
-        // Languages (enum values)
         List<FilterOption> languages = List.of(
             new FilterOption(null, "ENGLISH"),
             new FilterOption(null, "TAMIL"),

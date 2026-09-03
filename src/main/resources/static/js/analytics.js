@@ -149,7 +149,8 @@ async function applyFilters() {
 async function analyticsApiCall(endpoint) {
     const token = localStorage.getItem('accessToken');
     const qs = buildQueryString();
-    const url = `${ANALYTICS_API_BASE}${endpoint}${qs ? '?' + qs : ''}`;
+    const separator = endpoint.includes('?') ? '&' : '?';
+    const url = `${ANALYTICS_API_BASE}${endpoint}${qs ? separator + qs : ''}`;
 
     const res = await fetch(url, {
         headers: { 'Authorization': `Bearer ${token}` }
