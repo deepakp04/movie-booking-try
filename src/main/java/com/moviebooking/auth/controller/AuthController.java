@@ -1,7 +1,8 @@
 package com.moviebooking.auth.controller;
 
 import org.springframework.security.core.Authentication;
-import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -11,6 +12,8 @@ import com.moviebooking.auth.dto.ForgotPasswordRequest;
 import com.moviebooking.auth.dto.LoginRequest;
 import com.moviebooking.auth.dto.LoginResponse;
 import com.moviebooking.auth.dto.LogoutRequest;
+import com.moviebooking.auth.dto.ProfileDTOs.GetProfileResponse;
+import com.moviebooking.auth.dto.ProfileDTOs.UpdateProfileRequest;
 import com.moviebooking.auth.dto.RefreshTokenRequest;
 import com.moviebooking.auth.dto.RegisterRequest;
 import com.moviebooking.auth.dto.RegisterResponse;
@@ -20,6 +23,7 @@ import com.moviebooking.auth.dto.ResetPasswordRequest;
 import com.moviebooking.auth.dto.VerifyLoginOtpRequest;
 import com.moviebooking.auth.dto.VerifyOtpRequest;
 import com.moviebooking.auth.service.AuthService;
+import com.moviebooking.auth.service.ProfileService;
 import com.moviebooking.common.response.ApiResponse;
 
 import jakarta.validation.Valid;
@@ -29,9 +33,11 @@ import jakarta.validation.Valid;
 public class AuthController {
 
     private final AuthService authService;
+    private final ProfileService profileService;
 
-    public AuthController(AuthService authService) {
+    public AuthController(AuthService authService, ProfileService profileService) {
         this.authService = authService;
+        this.profileService = profileService;
     }
 
     @PostMapping("/register")
@@ -221,5 +227,22 @@ public class AuthController {
                 "Account deleted successfully",
                 null
         );
+    }
+
+    // ------------------------------------------------------------------
+    // Profile endpoints
+    // ------------------------------------------------------------------
+
+    @GetMapping("/profile")
+    public ApiResponse<GetProfileResponse> getProfile() {
+        GetProfileResponse response = profileService.getProfile();
+        return new ApiResponse<>(true, "Profile retrieved successfully", response);
+    }
+
+    @PutMapping("/profile")
+    public ApiResponse<GetProfileResponse> updateProfile(
+            @Valid @RequestBody UpdateProfileRequest request) {
+        GetProfileResponse response = profileService.updateProfile(request);
+        return new ApiResponse<>(true, "Profile updated successfully", response);
     }
 }

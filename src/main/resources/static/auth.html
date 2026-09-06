@@ -109,6 +109,7 @@
             <p class="info-text">Manage your active sessions or request account deletion.</p>
             
             <button type="button" class="btn btn-primary mb-10" onclick="switchView('myBookingsView')" style="width: 100%; margin-bottom: 10px;">🎬 My Bookings</button>
+            <button type="button" class="btn btn-secondary mb-10" onclick="loadAndShowProfile()" style="width: 100%; margin-bottom: 10px;">✏️ Edit Profile</button>
             <button type="button" class="btn btn-secondary mb-10" onclick="handleLogout()">Logout</button>
             <button type="button" class="btn btn-secondary mb-10" onclick="handleLogoutAll()">Logout From All Devices</button>
             
@@ -125,7 +126,35 @@
             </form>
         </div>
 
-        <!-- View 6: My Bookings -->
+        <!-- View 6: Edit Profile -->
+        <div id="profileView" class="auth-card hidden" style="max-width: 500px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <h2>Edit Profile</h2>
+                <button type="button" class="btn btn-secondary btn-sm" onclick="switchView('accountSettingsView')">← Back</button>
+            </div>
+            <p class="info-text" style="margin-bottom: 16px;">Update your personal information. All fields are required.</p>
+            <form id="profileForm" novalidate>
+                <div class="form-group">
+                    <label for="profileName">Full Name</label>
+                    <input type="text" id="profileName" placeholder="e.g. José O'Connor" required>
+                </div>
+                <div class="form-group">
+                    <label for="profileEmail">Email Address</label>
+                    <input type="email" id="profileEmail" placeholder="name@example.com" required>
+                </div>
+                <div class="form-group">
+                    <label for="profilePhone">Phone Number <span style="color: #71717a; font-size: 0.75rem;">(with country code)</span></label>
+                    <input type="tel" id="profilePhone" placeholder="e.g. +919876543210" required>
+                </div>
+                <div class="form-group">
+                    <label for="profileDob">Date of Birth</label>
+                    <input type="date" id="profileDob" required>
+                </div>
+                <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 8px;">Save Profile</button>
+            </form>
+        </div>
+
+        <!-- View 7: My Bookings -->
         <div id="myBookingsView" class="auth-card hidden" style="max-width: 900px;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
                 <h2>My Bookings</h2>

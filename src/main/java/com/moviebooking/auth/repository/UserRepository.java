@@ -13,4 +13,10 @@ public interface UserRepository
 
 	boolean existsByEmailAndIsDeletedFalse(
 	        String email);
+
+	boolean existsByEmailAndIdNotAndIsDeletedFalse(
+	        String email, Long id);
+
+	boolean existsByPhoneAndIdNotAndIsDeletedFalse(
+	        String phone, Long id);
 }

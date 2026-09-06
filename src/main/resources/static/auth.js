@@ -17,6 +17,7 @@ function switchView(viewId) {
         "otpView",
         "forgotPasswordView",
         "accountSettingsView",
+        "profileView",
         "myBookingsView"
     ];
     views.forEach(id => {
@@ -645,6 +646,92 @@ async function continuePayment(bookingId) {
         showAlert('Failed to initiate payment. Please try again.', 'error');
     }
 }
+
+// --- Profile Feature ---
+
+async function loadAndShowProfile() {
+    clearAllErrors();
+    switchView('profileView');
+
+    try {
+        const result = await apiCall('/profile', null, 'GET', true);
+        if (result && result.data) {
+            document.getElementById('profileName').value = result.data.name || '';
+            document.getElementById('profileEmail').value = result.data.email || '';
+            document.getElementById('profilePhone').value = result.data.phone || '';
+            document.getElementById('profileDob').value = result.data.dateOfBirth || '';
+        }
+    } catch (_) {
+        showAlert('Failed to load profile. Please try again.', 'error');
+    }
+}
+
+document.getElementById('profileForm')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    clearAllErrors();
+
+    const name = document.getElementById('profileName').value.trim();
+    const email = document.getElementById('profileEmail').value.trim();
+    const phone = document.getElementById('profilePhone').value.trim();
+    const dob = document.getElementById('profileDob').value;
+
+    let hasError = false;
+
+    // Name validation
+    if (name.length < 2) {
+        setFieldError('profileName', 'Name must contain at least 2 characters.');
+        hasError = true;
+    } else if (!/^[\p{L}\p{M}\s'\-\.]+$/.test(name)) {
+        setFieldError('profileName', 'Name contains unsupported characters. Use letters, spaces, hyphens, apostrophes, or periods.');
+        hasError = true;
+    }
+
+    // Email validation
+    if (!RegexRules.email.test(email)) {
+        setFieldError('profileEmail', 'Invalid email address. Enter a valid email, such as name@example.com.');
+        hasError = true;
+    }
+
+    // Phone validation
+    if (!phone) {
+        setFieldError('profilePhone', 'Phone number is required.');
+        hasError = true;
+    } else if (!/^\+\d{7,15}$/.test(phone)) {
+        setFieldError('profilePhone', 'Invalid phone number. Enter a valid international number with country code, e.g. +919876543210.');
+        hasError = true;
+    }
+
+    // DOB validation
+    if (!dob) {
+        setFieldError('profileDob', 'Date of birth is required.');
+        hasError = true;
+    } else {
+        const dobDate = new Date(dob);
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        if (dobDate >= today) {
+            setFieldError('profileDob', 'Date of birth cannot be in the future.');
+            hasError = true;
+        } else {
+            const age = Math.floor((today - dobDate) / (365.25 * 24 * 60 * 60 * 1000));
+            if (age < 5 || age > 120) {
+                setFieldError('profileDob', 'Age must be between 5 and 120 years.');
+                hasError = true;
+            }
+        }
+    }
+
+    if (hasError) return;
+
+    try {
+        const result = await apiCall('/profile', { name, email, phone, dateOfBirth: dob }, 'PUT', true);
+        if (result && result.data) {
+            showAlert('Profile updated successfully!', 'success');
+            localStorage.setItem('userName', result.data.name);
+            localStorage.setItem('userEmail', result.data.email);
+        }
+    } catch (_) {}
+});
 
 async function cancelBooking(bookingId) {
     if (!confirm('Are you sure you want to cancel this booking? The seats will be released.')) {

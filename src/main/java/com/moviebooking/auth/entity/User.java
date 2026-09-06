@@ -13,6 +13,8 @@ import jakarta.persistence.UniqueConstraint;
 import lombok.Getter;
 import lombok.Setter;
 
+import java.time.LocalDate;
+
 @Getter
 @Setter
 @Entity
@@ -40,6 +42,11 @@ public class User extends BaseEntity {
     @Column(nullable = false)
     private Boolean isEmailVerified = false;
     
+    @Column(length = 20)
+    private String phone;
+
+    private LocalDate dateOfBirth;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private UserStatus status =

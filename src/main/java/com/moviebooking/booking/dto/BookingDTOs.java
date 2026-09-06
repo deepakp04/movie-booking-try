@@ -49,13 +49,27 @@ public class BookingDTOs {
         Integer totalSeats,
         Integer availableSeats,
         Integer maxSeatsPerBooking,
+        String cbfcRating,
+        Long movieId,
         List<TierLegend> tiers,
         List<SeatInfo> seats
     ) {}
 
+    /**
+     * Attendee info sent with each hold request — one per seat.
+     */
+    public record AttendeeInfo(
+        String seatCode,
+        String attendeeName,
+        String dateOfBirth,   // ISO-8601 LocalDate
+        String phone,
+        Boolean isSelf
+    ) {}
+
     public record HoldSeatsRequest(
         Long showId,
-        List<String> seatCodes
+        List<String> seatCodes,
+        List<AttendeeInfo> attendees
     ) {}
 
     /** Per-seat breakdown so the checkout screen can itemize a tiered basket. */
@@ -78,6 +92,7 @@ public class BookingDTOs {
         Integer numberOfSeats,
         BigDecimal totalAmount,
         BookingStatus status,
-        LocalDateTime holdExpiresAt
+        LocalDateTime holdExpiresAt,
+        List<AttendeeInfo> attendees
     ) {}
 }

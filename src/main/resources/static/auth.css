@@ -242,3 +242,30 @@ body {
     display: block;
     line-height: 1.2;
 }
+
+/* Date and tel input styling for dark theme */
+.form-group input[type="date"],
+.form-group input[type="tel"] {
+    color-scheme: dark;
+}
+
+.form-group input[type="date"]::-webkit-calendar-picker-indicator {
+    filter: invert(0.8);
+}
+
+/* Small button variant */
+.btn-sm {
+    padding: 8px 16px;
+    font-size: 0.8rem;
+    width: auto;
+}
+
+.btn-sm:hover {
+    opacity: 0.9;
+}
+
+/* Booking card badge styles */
+.badge-gold { background: rgba(229, 184, 11, 0.15); color: #e5b80b; }
+.badge-orange { background: rgba(255, 152, 0, 0.15); color: #ffb74d; }
+.badge-red { background: rgba(229, 57, 53, 0.15); color: #ff8a80; }
+.badge-gray { background: rgba(140, 147, 160, 0.15); color: #8c93a0; }

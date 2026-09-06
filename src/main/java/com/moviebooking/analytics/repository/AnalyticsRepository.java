@@ -13,8 +13,6 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
-//"?"
-
 /**
  * Native aggregation queries for analytics.
  * All revenue comes from show_seats.price (immutable snapshot).
@@ -799,7 +797,6 @@ public class AnalyticsRepository {
         try { return Long.parseLong(String.valueOf(val)); }
         catch (Exception e) { return null; }
     }
-
 
     private static LocalDateTime toLocalDateTime(Object val) {
         if (val instanceof LocalDateTime ldt) return ldt;

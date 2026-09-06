@@ -159,6 +159,41 @@
         </div>
     </div>
 
+    <!-- Attendee Details Modal -->
+    <div id="attendeeModal" class="modal hidden">
+        <div class="modal-card" style="max-width: 600px; max-height: 90vh; overflow-y: auto;">
+            <h2>Who's Watching?</h2>
+            <div id="ageRestrictionBanner" class="age-restriction-banner hidden">
+                <span>⚠️</span>
+                <span>This is an <strong>A-rated (Adults 18+)</strong> film. All attendees must be 18 or older.</span>
+            </div>
+            <p id="attendeeMovieInfo" class="info-text" style="margin-bottom: 12px;"></p>
+
+            <!-- Self / Others Toggle -->
+            <div class="attendee-toggle">
+                <button type="button" id="toggleSelf" class="toggle-btn active" onclick="setBookingType('self')">Booking for Myself</button>
+                <button type="button" id="toggleOthers" class="toggle-btn" onclick="setBookingType('others')">Booking for Others</button>
+            </div>
+
+            <!-- Profile incomplete warning for self mode -->
+            <div id="profileIncompleteWarning" class="profile-incomplete-warning hidden">
+                <p>Your profile is missing required information.</p>
+                <a href="/auth.html" class="btn btn-secondary btn-sm" style="margin-top: 8px;">Complete Profile First</a>
+            </div>
+
+            <!-- Per-seat attendee forms -->
+            <div id="attendeeForms" class="attendee-forms"></div>
+
+            <!-- Phone requirement note -->
+            <p class="phone-requirement-note">* At least one phone number is required across all tickets.</p>
+
+            <div class="modal-actions" style="margin-top: 16px;">
+                <button class="btn btn-secondary" onclick="closeAttendeeModal()">Back to Seats</button>
+                <button class="btn btn-primary" id="attendeeContinueBtn" onclick="submitAttendees()" disabled>Continue to Pay</button>
+            </div>
+        </div>
+    </div>
+
     <script src="/js/catalog.js"></script>
 </body>
 </html>

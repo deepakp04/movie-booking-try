@@ -1,5 +1,17 @@
 const API_BASE = '/catalog';
 
+// Global Alert Helper
+function showAlert(message, type = 'error') {
+    const alertBox = document.getElementById('alertBox');
+    if (!alertBox) return;
+    alertBox.className = `alert alert-${type}`;
+    alertBox.textContent = message;
+    alertBox.classList.remove('hidden');
+    // Auto-hide after 6 seconds
+    clearTimeout(alertBox._hideTimer);
+    alertBox._hideTimer = setTimeout(() => alertBox.classList.add('hidden'), 6000);
+}
+
 // State
 let selectedCityId = localStorage.getItem('selectedCityId') || null;
 let currentMovieId = null;
@@ -9,11 +21,17 @@ let pendingShowBooking = null;
 let currentBookingId = null; // Stores ID during payment flow
 let razorpayKey = null;      // Will be fetched from backend
 
+// Attendee flow state
+let userProfile = null;      // Cached profile for "for self" auto-fill
+let currentCbfcRating = null; // CBFC rating of the movie being booked
+let bookingType = 'self';    // 'self' | 'others'
+
 // Initialize
 document.addEventListener('DOMContentLoaded', () => {
     loadCities();
     checkAuthState();
     resumeHoldSession(); // Resume any active hold session on page load
+    if (isAuthenticated()) fetchUserProfile();
 });
 
 // Auth Check (matching auth.js token key "accessToken")
@@ -554,6 +572,9 @@ async function fetchAndRenderSeats(showId) {
         const res = await bookingApiCall(`/shows/${showId}/seats`, 'GET');
         const map = res.data;
 
+        // Store CBFC rating for age restriction checks
+        currentCbfcRating = map.cbfcRating || null;
+
         seatPriceMap = {};
         (map.seats || []).forEach(s => {
             if (s.seatCode && s.price !== null && s.price !== undefined) {
@@ -712,106 +733,8 @@ function goBackToMovieDetail() {
 async function proceedToPayment() {
     if (selectedSeats.length === 0) return;
 
-    const confirmed = confirm(
-        `You're about to hold ${selectedSeats.length} seat(s).\n\n` +
-        `Tickets are 100% NON-REFUNDABLE once payment is completed.\n\nContinue to payment?`
-    );
-    if (!confirmed) return;
-
-    // Disable the button so user can't double-click
-    const payBtn = document.getElementById('payNowBtn');
-    if (payBtn) {
-        payBtn.disabled = true;
-        payBtn.textContent = 'Opening payment...';
-    }
-
-    try {
-        // Step 1: Hold the seats
-        const holdRes = await bookingApiCall('/hold', 'POST', {
-            showId: activeShowContext.showId,
-            seatCodes: selectedSeats
-        });
-
-        const booking = holdRes.data;
-        activeBookingId = booking.bookingId;
-        holdExpiresAt = new Date(booking.holdExpiresAt).getTime();
-        myHeldSeats = new Set(booking.seatCodes);
-        saveHoldSession();
-        startHoldCountdown(booking.holdExpiresAt);
-
-        // Step 2: Create Razorpay order
-        const orderRes = await paymentApiCall('/orders', 'POST', {
-            bookingId: activeBookingId
-        });
-
-        const order = orderRes.data;
-        holdExpiresAt = new Date(order.expiresAt).getTime();
-        saveHoldSession();
-
-        // Step 3: Open Razorpay Checkout directly
-        const options = {
-            key: order.razorpayKeyId,
-            amount: Math.round(parseFloat(order.amount) * 100),
-            currency: order.currency,
-            name: 'PVR Cinemas',
-            description: 'Ticket Purchase',
-            order_id: order.razorpayOrderId,
-            handler: async function(response) {
-                try {
-                    const verifyRes = await paymentApiCall('/verify', 'POST', {
-                        razorpayOrderId: response.razorpay_order_id,
-                        razorpayPaymentId: response.razorpay_payment_id,
-                        razorpaySignature: response.razorpay_signature
-                    });
-
-                    if (verifyRes.success) {
-                        clearHoldSession();
-                        disconnectFromSeatStream();
-                        showAlert('Payment successful! Your booking is confirmed.', 'success');
-                        setTimeout(() => window.location.href = '/auth.html', 2000);
-                    }
-                } catch (err) {
-                    showAlert('Payment verification failed. Please contact support.', 'error');
-                }
-            },
-            prefill: {
-                name: localStorage.getItem('userName') || '',
-                email: localStorage.getItem('userEmail') || '',
-                contact: ''
-            },
-            theme: {
-                color: '#6c5ce7'
-            },
-            modal: {
-                ondismiss: function() {
-                    // User closed the payment window — re-render seats to show held state
-                    showAlert('Payment cancelled. Your seats are held for 20 minutes. You can pay from My Bookings.', 'error');
-                    fetchAndRenderSeats(activeShowContext.showId);
-                    selectedSeats = [];
-                    updateCheckoutBar();
-                }
-            }
-        };
-
-        const rzp = new Razorpay(options);
-        rzp.on('payment.failed', function(response) {
-            showAlert('Payment failed: ' + (response.error.description || 'Please try again.'), 'error');
-        });
-        rzp.open();
-
-    } catch (err) {
-        // Refresh seat map on error so user sees current availability
-        await fetchAndRenderSeats(activeShowContext.showId);
-        selectedSeats = [];
-        updateCheckoutBar();
-    } finally {
-        // Re-enable the button in case we didn't redirect
-        if (payBtn) {
-            payBtn.disabled = false;
-            payBtn.textContent = 'Continue';
-            updateCheckoutBar();
-        }
-    }
+    // Open attendee modal instead of going directly to payment
+    openAttendeeModal();
 }
 
 function startHoldCountdown(expiresAtIso) {
@@ -924,7 +847,7 @@ function connectToSeatStream(showId) {
             seatElement.classList.remove('available', 'held', 'booked');
             if (isTaken) {
                 seatElement.classList.add('booked');
-                seatElement.title = `${update.seatCode} - unavailable`;
+                seatElement.title = `${update.seatCode} - sold`;
                 seatElement.onclick = null;
             } else if (heldByMe) {
                 seatElement.classList.add('held');
@@ -965,4 +888,338 @@ function disconnectFromSeatStream() {
 // Quick access to My Bookings from the catalog page
 function viewMyBookings() {
     window.location.href = '/auth.html';
+}
+
+// =========================================
+// ATTENDEE MODAL LOGIC
+// =========================================
+
+// Fetch logged-in user's profile for auto-fill
+async function fetchUserProfile() {
+    try {
+        const token = localStorage.getItem('accessToken');
+        if (!token) return;
+        const res = await fetch('/auth/profile', {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const result = await res.json();
+        if (result.success && result.data) {
+            userProfile = result.data;
+            localStorage.setItem('userName', userProfile.name || '');
+            localStorage.setItem('userEmail', userProfile.email || '');
+        }
+    } catch (err) {
+        console.error('[PROFILE] Failed to load profile:', err);
+    }
+}
+
+// Open the attendee details modal
+function openAttendeeModal() {
+    bookingType = 'self';
+    document.getElementById('toggleSelf').classList.add('active');
+    document.getElementById('toggleOthers').classList.remove('active');
+    document.getElementById('attendeeModal').classList.remove('hidden');
+
+    // Movie info
+    const movieTitle = document.getElementById('bookingMovieTitle')?.innerText || '';
+    document.getElementById('attendeeMovieInfo').textContent = 
+        `${movieTitle} — ${selectedSeats.length} ticket${selectedSeats.length > 1 ? 's' : ''}`;
+
+    // Age restriction banner
+    const banner = document.getElementById('ageRestrictionBanner');
+    if (currentCbfcRating === 'A') {
+        banner.classList.remove('hidden');
+    } else {
+        banner.classList.add('hidden');
+    }
+
+    renderAttendeeForms();
+}
+
+function closeAttendeeModal() {
+    document.getElementById('attendeeModal').classList.add('hidden');
+}
+
+function setBookingType(type) {
+    bookingType = type;
+    document.getElementById('toggleSelf').classList.toggle('active', type === 'self');
+    document.getElementById('toggleOthers').classList.toggle('active', type === 'others');
+    renderAttendeeForms();
+}
+
+function renderAttendeeForms() {
+    const container = document.getElementById('attendeeForms');
+    container.innerHTML = '';
+
+    // Check if profile is complete for "self" mode
+    if (bookingType === 'self') {
+        if (!userProfile || !userProfile.dateOfBirth || !userProfile.phone) {
+            document.getElementById('profileIncompleteWarning').classList.remove('hidden');
+            document.getElementById('attendeeContinueBtn').disabled = true;
+            return;
+        }
+        document.getElementById('profileIncompleteWarning').classList.add('hidden');
+    } else {
+        document.getElementById('profileIncompleteWarning').classList.add('hidden');
+    }
+
+    selectedSeats.forEach((seatCode, index) => {
+        const card = document.createElement('div');
+        card.className = 'attendee-card';
+        card.dataset.seat = seatCode;
+
+        const isSelf = bookingType === 'self';
+        const name = isSelf ? (userProfile?.name || '') : '';
+        const dob = isSelf ? (userProfile?.dateOfBirth || '') : '';
+        const phone = isSelf ? (userProfile?.phone || '') : '';
+        const isPhoneRequired = index === 0; // First seat always requires phone input
+
+        card.innerHTML = `
+            <div class="attendee-card-header">
+                <span class="attendee-seat-badge">Seat ${seatCode}</span>
+                ${isSelf ? '<span class="attendee-self-badge">From your profile</span>' : ''}
+            </div>
+            <div class="form-group">
+                <label>Full Name <span class="required">*</span></label>
+                <input type="text" class="att-name" value="${escapeHtmlAttr(name)}" 
+                    placeholder="e.g. José O'Connor" required>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Date of Birth <span class="required">*</span></label>
+                    <input type="date" class="att-dob" value="${dob}" required>
+                </div>
+                <div class="form-group">
+                    <label>Phone ${isPhoneRequired ? '<span class="required">*</span>' : ''}</label>
+                    <input type="tel" class="att-phone" value="${escapeHtmlAttr(phone)}" 
+                        placeholder="+919876543210">
+                </div>
+            </div>
+        `;
+        container.appendChild(card);
+    });
+
+    // Attach input listeners for live validation
+    container.querySelectorAll('input').forEach(input => {
+        input.addEventListener('input', validateAttendees);
+    });
+
+    validateAttendees();
+}
+
+function escapeHtmlAttr(str) {
+    if (!str) return '';
+    return str.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+function validateAttendees() {
+    const cards = document.querySelectorAll('.attendee-card');
+    let allValid = true;
+    let hasPhone = false;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    cards.forEach(card => {
+        const seatCode = card.dataset.seat;
+        const nameInput = card.querySelector('.att-name');
+        const dobInput = card.querySelector('.att-dob');
+        const phoneInput = card.querySelector('.att-phone');
+
+        // Clear previous errors
+        [nameInput, dobInput, phoneInput].forEach(input => {
+            if (input) {
+                input.classList.remove('input-error');
+                const errEl = input.parentElement.querySelector('.field-error-msg');
+                if (errEl) errEl.remove();
+            }
+        });
+
+        const name = nameInput?.value.trim() || '';
+        const dob = dobInput?.value || '';
+        const phone = phoneInput?.value.trim() || '';
+
+        // Name validation
+        if (name.length < 2) {
+            setAttendeeError(nameInput, 'Name must be at least 2 characters.');
+            allValid = false;
+        }
+
+        // DOB validation (required)
+        if (!dob) {
+            setAttendeeError(dobInput, 'Date of birth is required.');
+            allValid = false;
+        } else {
+            const dobDate = new Date(dob + 'T00:00:00');
+            if (dobDate >= today) {
+                setAttendeeError(dobInput, 'DOB cannot be in the future.');
+                allValid = false;
+            } else {
+                const age = Math.floor((today - dobDate) / (365.25 * 24 * 60 * 60 * 1000));
+                if (age < 5 || age > 120) {
+                    setAttendeeError(dobInput, 'Age must be 5-120.');
+                    allValid = false;
+                }
+                // Age restriction for A-rated films
+                if (currentCbfcRating === 'A' && age < 18) {
+                    setAttendeeError(dobInput, `Age ${age} — A-rated film requires 18+.`);
+                    allValid = false;
+                }
+            }
+        }
+
+        // Phone validation (optional per seat, but first seat requires it)
+        const isPhoneRequired = card === cards[0];
+        if (phone) {
+            if (!/^\+\d{7,15}$/.test(phone)) {
+                setAttendeeError(phoneInput, 'Use format +countrycode number, e.g. +919876543210.');
+                allValid = false;
+            }
+        }
+
+        if (phone) hasPhone = true;
+    });
+
+    // At least one phone required across all
+    if (!hasPhone && allValid) {
+        allValid = false;
+    }
+
+    const continueBtn = document.getElementById('attendeeContinueBtn');
+    if (continueBtn) continueBtn.disabled = !allValid;
+}
+
+function setAttendeeError(input, message) {
+    if (!input) return;
+    input.classList.add('input-error');
+    const errEl = document.createElement('span');
+    errEl.className = 'field-error-msg';
+    errEl.textContent = message;
+    input.parentElement.appendChild(errEl);
+}
+
+async function submitAttendees() {
+    const cards = document.querySelectorAll('.attendee-card');
+    const attendees = [];
+
+    cards.forEach(card => {
+        const seatCode = card.dataset.seat;
+        const name = card.querySelector('.att-name')?.value.trim() || '';
+        const dob = card.querySelector('.att-dob')?.value || '';
+        const phone = card.querySelector('.att-phone')?.value.trim() || '';
+        const isSelf = bookingType === 'self';
+
+        attendees.push({
+            seatCode,
+            attendeeName: name,
+            dateOfBirth: dob,
+            phone: phone || null,
+            isSelf
+        });
+    });
+
+    // Store attendees for the hold request
+    window._pendingAttendees = attendees;
+
+    // Close attendee modal
+    closeAttendeeModal();
+
+    // Show confirmation
+    const confirmed = confirm(
+        `You're about to hold ${selectedSeats.length} seat(s).\n\n` +
+        `Tickets are 100% NON-REFUNDABLE once payment is completed.\n\nContinue to payment?`
+    );
+    if (!confirmed) return;
+
+    // Proceed with the existing payment flow
+    const payBtn = document.getElementById('payNowBtn');
+    if (payBtn) {
+        payBtn.disabled = true;
+        payBtn.textContent = 'Opening payment...';
+    }
+
+    try {
+        // Step 1: Hold the seats with attendee info
+        const holdRes = await bookingApiCall('/hold', 'POST', {
+            showId: activeShowContext.showId,
+            seatCodes: selectedSeats,
+            attendees: window._pendingAttendees
+        });
+
+        const booking = holdRes.data;
+        activeBookingId = booking.bookingId;
+        holdExpiresAt = new Date(booking.holdExpiresAt).getTime();
+        myHeldSeats = new Set(booking.seatCodes);
+        saveHoldSession();
+        startHoldCountdown(booking.holdExpiresAt);
+
+        // Step 2: Create Razorpay order
+        const orderRes = await paymentApiCall('/orders', 'POST', {
+            bookingId: activeBookingId
+        });
+
+        const order = orderRes.data;
+        holdExpiresAt = new Date(order.expiresAt).getTime();
+        saveHoldSession();
+
+        // Step 3: Open Razorpay Checkout
+        const options = {
+            key: order.razorpayKeyId,
+            amount: Math.round(parseFloat(order.amount) * 100),
+            currency: order.currency,
+            name: 'PVR Cinemas',
+            description: 'Ticket Purchase',
+            order_id: order.razorpayOrderId,
+            handler: async function(response) {
+                try {
+                    const verifyRes = await paymentApiCall('/verify', 'POST', {
+                        razorpayOrderId: response.razorpay_order_id,
+                        razorpayPaymentId: response.razorpay_payment_id,
+                        razorpaySignature: response.razorpay_signature
+                    });
+
+                    if (verifyRes.success) {
+                        clearHoldSession();
+                        disconnectFromSeatStream();
+                        showAlert('Payment successful! Your booking is confirmed.', 'success');
+                        setTimeout(() => window.location.href = '/auth.html', 2000);
+                    }
+                } catch (err) {
+                    showAlert('Payment verification failed. Please contact support.', 'error');
+                }
+            },
+            prefill: {
+                name: localStorage.getItem('userName') || '',
+                email: localStorage.getItem('userEmail') || '',
+                contact: ''
+            },
+            theme: {
+                color: '#6c5ce7'
+            },
+            modal: {
+                ondismiss: function() {
+                    showAlert('Payment cancelled. Your seats are held for 20 minutes. You can pay from My Bookings.', 'error');
+                    fetchAndRenderSeats(activeShowContext.showId);
+                    selectedSeats = [];
+                    updateCheckoutBar();
+                }
+            }
+        };
+
+        const rzp = new Razorpay(options);
+        rzp.on('payment.failed', function(response) {
+            showAlert('Payment failed: ' + (response.error.description || 'Please try again.'), 'error');
+        });
+        rzp.open();
+
+    } catch (err) {
+        await fetchAndRenderSeats(activeShowContext.showId);
+        selectedSeats = [];
+        updateCheckoutBar();
+    } finally {
+        if (payBtn) {
+            payBtn.disabled = false;
+            payBtn.textContent = 'Continue';
+            updateCheckoutBar();
+        }
+    }
 }

@@ -4,11 +4,14 @@ import com.moviebooking.auth.entity.User;
 import com.moviebooking.auth.repository.UserRepository;
 import com.moviebooking.booking.dto.BookingDTOs.*;
 import com.moviebooking.booking.model.Booking;
+import com.moviebooking.booking.model.BookingAttendee;
 import com.moviebooking.booking.model.BookingStatus;
 import com.moviebooking.booking.model.SeatStatus;
 import com.moviebooking.booking.model.ShowSeat;
+import com.moviebooking.booking.repository.BookingAttendeeRepository;
 import com.moviebooking.booking.repository.BookingRepository;
 import com.moviebooking.booking.repository.ShowSeatRepository;
+import com.moviebooking.catalog.model.CbfcRating;
 import com.moviebooking.catalog.model.ScreenSeat;
 import com.moviebooking.catalog.model.SeatTier;
 import com.moviebooking.catalog.model.SeatType;
@@ -26,7 +29,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.Period;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
@@ -42,6 +47,7 @@ public class BookingService {
 
     private static final int MAX_SEATS_PER_BOOKING = 10;
     private static final int HOLD_MINUTES = 20;
+    private static final int MIN_BOOKING_AGE = 18;
 
     // Only used for screens whose layout has never been drawn in the Maintenance
     // tab. Once screen_seats exist for a screen the real grid is used instead.
@@ -51,6 +57,7 @@ public class BookingService {
     private final ShowSeatRepository showSeatRepository;
     private final BookingRepository bookingRepository;
     private final UserRepository userRepository;
+    private final BookingAttendeeRepository attendeeRepository;
     private final ScreenSeatRepository screenSeatRepository;
     private final ShowPricingService showPricing;
     private final SeatStreamService seatStreamService;
@@ -59,6 +66,7 @@ public class BookingService {
                            ShowSeatRepository showSeatRepository,
                            BookingRepository bookingRepository,
                            UserRepository userRepository,
+                           BookingAttendeeRepository attendeeRepository,
                            ScreenSeatRepository screenSeatRepository,
                            ShowPricingService showPricing,
                            SeatStreamService seatStreamService) {
@@ -66,6 +74,7 @@ public class BookingService {
         this.showSeatRepository = showSeatRepository;
         this.bookingRepository = bookingRepository;
         this.userRepository = userRepository;
+        this.attendeeRepository = attendeeRepository;
         this.screenSeatRepository = screenSeatRepository;
         this.showPricing = showPricing;
         this.seatStreamService = seatStreamService;
@@ -97,15 +106,6 @@ public class BookingService {
     // Materialization
     // ------------------------------------------------------------------
 
-    // Creates the show_seats rows the first time a show's seat map is touched.
-    //
-    // Seats now come from the screen's real screen_seats grid, so the arrangement
-    // the theatre drew is exactly what customers see. Tier name and price are
-    // snapshotted onto each row here, which is what stops a later price or tier
-    // edit from rewriting history.
-    //
-    // Safe under concurrency: if two requests race, the loser's insert violates
-    // the (show_id, seat_code) unique constraint and is ignored.
     @Transactional
     public Show ensureSeatsInitialized(Long showId) {
         Show show = showRepository.findByIdAndIsDeletedFalse(showId)
@@ -139,8 +139,6 @@ public class BookingService {
     private List<ShowSeat> buildSeatsFromGrid(Show show, List<ScreenSeat> definitions) {
         List<ShowSeat> seats = new ArrayList<>();
         for (ScreenSeat def : definitions) {
-            // Pathways and blocked cells are part of the grid but not sellable,
-            // so they never become show_seats rows.
             if (def.getSeatType() != SeatType.SEAT || def.getSeatNumber() == null) {
                 continue;
             }
@@ -158,7 +156,6 @@ public class BookingService {
         return seats;
     }
 
-    // Flat fallback grid for screens with no drawn layout.
     private List<ShowSeat> buildLegacySeats(Show show) {
         int totalSeats = show.getScreen().getTotalSeats() == null ? 0 : show.getScreen().getTotalSeats();
         List<ShowSeat> seats = new ArrayList<>();
@@ -207,7 +204,6 @@ public class BookingService {
         int cols;
 
         if (!grid.isEmpty()) {
-            // Walk the physical grid so aisles land in the right columns.
             rows = (int) grid.stream().map(ScreenSeat::getRowLabel).distinct().count();
             cols = grid.stream().mapToInt(ScreenSeat::getColIndex).max().orElse(-1) + 1;
 
@@ -232,7 +228,6 @@ public class BookingService {
                 ));
             }
         } else {
-            // Legacy flat grid: synthesize geometry from the seat codes.
             List<ShowSeat> sorted = showSeats.stream()
                     .sorted(Comparator.comparing((ShowSeat s) -> rowPart(s.getSeatCode()))
                             .thenComparingInt(s -> numberPart(s.getSeatCode())))
@@ -256,8 +251,6 @@ public class BookingService {
             cols = LEGACY_SEATS_PER_ROW;
         }
 
-        // Legend built from what the seats actually cost in this show, so it can
-        // never disagree with the prices being charged.
         Map<String, TierLegend> legend = new LinkedHashMap<>();
         for (ShowSeat s : showSeats) {
             if (s.getTierName() == null) continue;
@@ -269,6 +262,10 @@ public class BookingService {
         }
 
         int available = (int) showSeats.stream().filter(s -> s.getStatus() == SeatStatus.AVAILABLE).count();
+
+        // Include CBFC rating and movie ID so frontend can enforce age restrictions
+        CbfcRating cbfcRating = show.getMovie().getCbfcRating();
+        Long movieId = show.getMovie().getId();
 
         return new SeatMapResponse(
                 showId,
@@ -284,6 +281,8 @@ public class BookingService {
                 showSeats.size(),
                 available,
                 MAX_SEATS_PER_BOOKING,
+                cbfcRating != null ? cbfcRating.name() : null,
+                movieId,
                 new ArrayList<>(legend.values()),
                 seatInfos
         );
@@ -293,7 +292,6 @@ public class BookingService {
     // Holding seats
     // ------------------------------------------------------------------
 
-    // All-or-nothing: either every requested seat is held, or none are.
     @Transactional
     public BookingResponse holdSeats(HoldSeatsRequest req) {
         if (req.seatCodes() == null || req.seatCodes().isEmpty()) {
@@ -313,6 +311,88 @@ public class BookingService {
         User user = currentUser();
         expireStaleHolds();
 
+        // ------------------------------------------------------------------
+        // Attendee validation
+        // ------------------------------------------------------------------
+        List<AttendeeInfo> attendees = req.attendees();
+        if (attendees == null || attendees.isEmpty()) {
+            throw new BusinessException("Attendee information is required for each seat.");
+        }
+        if (attendees.size() != uniqueCodes.size()) {
+            throw new BusinessException(
+                    "Attendee count (" + attendees.size() + ") must match seat count (" + uniqueCodes.size() + ").");
+        }
+
+        // At least one phone number required across all attendees
+        boolean hasPhone = attendees.stream()
+                .anyMatch(a -> a.phone() != null && !a.phone().trim().isEmpty());
+        if (!hasPhone) {
+            throw new BusinessException("At least one attendee must provide a phone number.");
+        }
+
+        // Validate each attendee
+        for (AttendeeInfo attendee : attendees) {
+            // Name validation
+            if (attendee.attendeeName() == null || attendee.attendeeName().trim().length() < 2) {
+                throw new BusinessException(
+                        "Attendee name for seat " + attendee.seatCode() + " must be at least 2 characters.");
+            }
+
+            // DOB validation (required)
+            if (attendee.dateOfBirth() == null || attendee.dateOfBirth().trim().isEmpty()) {
+                throw new BusinessException(
+                        "Date of birth is required for attendee at seat " + attendee.seatCode() + ".");
+            }
+
+            LocalDate dob;
+            try {
+                dob = LocalDate.parse(attendee.dateOfBirth().trim());
+            } catch (Exception e) {
+                throw new BusinessException(
+                        "Invalid date of birth format for attendee at seat " + attendee.seatCode() + ". Use YYYY-MM-DD.");
+            }
+
+            if (dob.isAfter(LocalDate.now())) {
+                throw new BusinessException(
+                        "Date of birth cannot be in the future for attendee at seat " + attendee.seatCode() + ".");
+            }
+
+            int age = Period.between(dob, LocalDate.now()).getYears();
+            if (age < 5 || age > 120) {
+                throw new BusinessException(
+                        "Age must be between 5 and 120 for attendee at seat " + attendee.seatCode() + ".");
+            }
+
+            // Phone validation (only if provided)
+            if (attendee.phone() != null && !attendee.phone().trim().isEmpty()) {
+                if (!attendee.phone().trim().matches("^\\+\\d{7,15}$")) {
+                    throw new BusinessException(
+                            "Invalid phone number for attendee at seat " + attendee.seatCode()
+                            + ". Use international format, e.g. +919876543210.");
+                }
+            }
+        }
+
+        // ------------------------------------------------------------------
+        // Age restriction for A-rated films
+        // ------------------------------------------------------------------
+        CbfcRating rating = show.getMovie().getCbfcRating();
+        if (rating == CbfcRating.A) {
+            for (AttendeeInfo attendee : attendees) {
+                LocalDate dob = LocalDate.parse(attendee.dateOfBirth().trim());
+                int age = Period.between(dob, LocalDate.now()).getYears();
+                if (age < MIN_BOOKING_AGE) {
+                    throw new BusinessException(
+                            "This is an A-rated (Adults 18+) film. Attendee \""
+                            + attendee.attendeeName().trim()
+                            + "\" (age " + age + ") is under 18 and cannot watch this film.");
+                }
+            }
+        }
+
+        // ------------------------------------------------------------------
+        // Lock seats
+        // ------------------------------------------------------------------
         List<String> codesList = new ArrayList<>(uniqueCodes);
         List<ShowSeat> lockedSeats = showSeatRepository.findForUpdate(req.showId(), codesList);
 
@@ -331,18 +411,18 @@ public class BookingService {
                 .collect(Collectors.toList());
 
         if (!unavailable.isEmpty()) {
-            throw new BusinessException(
-                    "These seats are no longer available: " + String.join(", ", unavailable));
+            throw new BusinessException("These seats are no longer available: " + String.join(", ", unavailable));
         }
 
-        // Total is summed from each seat's own snapshotted price rather than
-        // basePrice x count, which is what makes tiered pricing correct.
         BigDecimal total = lockedSeats.stream()
                 .map(s -> s.getPrice() != null ? s.getPrice() : show.getBasePrice())
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
         LocalDateTime expiry = now.plusMinutes(HOLD_MINUTES);
 
+        // ------------------------------------------------------------------
+        // Save booking
+        // ------------------------------------------------------------------
         Booking booking = new Booking();
         booking.setShow(show);
         booking.setUser(user);
@@ -354,14 +434,27 @@ public class BookingService {
         booking.setHoldExpiresAt(expiry);
         Booking savedBooking = bookingRepository.save(booking);
 
+        // Save attendees
+        for (AttendeeInfo attendee : attendees) {
+            BookingAttendee ba = new BookingAttendee();
+            ba.setBooking(savedBooking);
+            ba.setSeatCode(attendee.seatCode());
+            ba.setAttendeeName(attendee.attendeeName().trim());
+            ba.setDateOfBirth(LocalDate.parse(attendee.dateOfBirth().trim()));
+            ba.setPhone(attendee.phone() != null ? attendee.phone().trim() : null);
+            ba.setIsSelf(Boolean.TRUE.equals(attendee.isSelf()));
+            savedBooking.getAttendees().add(ba);
+        }
+        attendeeRepository.saveAll(savedBooking.getAttendees());
+
+        // Hold seats
         for (ShowSeat s : lockedSeats) {
             s.setStatus(SeatStatus.HELD);
             s.setHeldByUserId(user.getId());
             s.setHoldExpiresAt(expiry);
             s.setBookingId(savedBooking.getId());
             
-            // Broadcast real-time seat update via SSE
-            seatStreamService.broadcastSeatUpdate(show.getId(), 
+            seatStreamService.broadcastSeatUpdate(show.getId(),
                 new SeatUpdateEvent(show.getId(), s.getSeatCode(), "HELD", user.getId(), true, "HELD", s.getPrice()));
         }
         showSeatRepository.saveAll(lockedSeats);
@@ -380,9 +473,6 @@ public class BookingService {
         return toBookingResponse(booking, seats);
     }
 
-    /**
-     * Get all bookings for the current user - for "My Bookings" page.
-     */
     @Transactional(readOnly = true)
     public List<BookingResponse> getAllBookingsForUser() {
         User user = currentUser();
@@ -392,9 +482,6 @@ public class BookingService {
                 .toList();
     }
 
-    /**
-     * Get all bookings for a specific theatre (Admin/Owner use).
-     */
     @Transactional(readOnly = true)
     public List<BookingResponse> getBookingsByTheatre(Long theatreId) {
         List<Booking> bookings = bookingRepository.findByTheatreId(theatreId);
@@ -403,9 +490,6 @@ public class BookingService {
                 .toList();
     }
 
-    /**
-     * Get all bookings for a specific show (Admin/Owner use).
-     */
     @Transactional(readOnly = true)
     public List<BookingResponse> getBookingsByShow(Long showId) {
         List<Booking> bookings = bookingRepository.findByShowId(showId);
@@ -414,9 +498,6 @@ public class BookingService {
                 .toList();
     }
 
-    /**
-     * Get all bookings across the system (Admin only).
-     */
     @Transactional(readOnly = true)
     public List<BookingResponse> getAllBookings() {
         List<Booking> bookings = bookingRepository.findAllByIsDeletedFalseOrderByCreatedAtDesc();
@@ -425,8 +506,6 @@ public class BookingService {
                 .toList();
     }
 
-    // User backs out before paying - release the seats immediately instead of
-    // waiting for the hold to lapse.
     @Transactional
     public void cancelBooking(Long bookingId) {
         User user = currentUser();
@@ -443,7 +522,6 @@ public class BookingService {
             if (booking.getId().equals(s.getBookingId())) {
                 releaseSeat(s);
                 
-                // Broadcast real-time seat update via SSE
                 seatStreamService.broadcastSeatUpdate(booking.getShow().getId(),
                     new SeatUpdateEvent(booking.getShow().getId(), s.getSeatCode(), "AVAILABLE", null, false, "RELEASED", s.getPrice()));
             }
@@ -454,10 +532,6 @@ public class BookingService {
         bookingRepository.save(booking);
     }
 
-    // Flips any hold whose 10-minute window has lapsed back to AVAILABLE and
-    // marks its booking EXPIRED. Called opportunistically on every seat-map and
-    // hold request so availability is self-healing, in addition to the scheduled
-    // sweep in BookingMaintenanceScheduler.
     @Transactional
     public void expireStaleHolds() {
         LocalDateTime now = LocalDateTime.now();
@@ -471,7 +545,6 @@ public class BookingService {
             String seatCode = s.getSeatCode();
             releaseSeat(s);
             
-            // Broadcast real-time seat update via SSE for expired holds
             seatStreamService.broadcastSeatUpdate(showId,
                 new SeatUpdateEvent(showId, seatCode, "AVAILABLE", null, false, "EXPIRED", s.getPrice()));
         }
@@ -492,6 +565,24 @@ public class BookingService {
         s.setHeldByUserId(null);
         s.setHoldExpiresAt(null);
         s.setBookingId(null);
+    }
+
+    // ------------------------------------------------------------------
+    // Response mapping
+    // ------------------------------------------------------------------
+
+    private List<AttendeeInfo> mapAttendees(Booking b) {
+        if (b.getAttendees() == null || b.getAttendees().isEmpty()) {
+            return List.of();
+        }
+        return b.getAttendees().stream()
+                .map(a -> new AttendeeInfo(
+                        a.getSeatCode(),
+                        a.getAttendeeName(),
+                        a.getDateOfBirth() != null ? a.getDateOfBirth().toString() : null,
+                        a.getPhone(),
+                        a.getIsSelf()))
+                .toList();
     }
 
     private BookingResponse toBookingResponse(Booking b, List<ShowSeat> seats) {
@@ -520,19 +611,15 @@ public class BookingService {
                 b.getNumberOfSeats(),
                 b.getTotalAmount(),
                 b.getStatus(),
-                b.getHoldExpiresAt()
+                b.getHoldExpiresAt(),
+                mapAttendees(b)
         );
     }
 
-    /**
-     * Convert booking to response without fetching individual seats.
-     * Used for list views where we only need summary info.
-     */
     private BookingResponse toBookingResponseWithSeats(Booking b) {
         Show show = b.getShow();
         List<String> codes = List.of(b.getSeatCodes().split(","));
         
-        // Create minimal seat lines without full seat details for list view
         List<BookedSeatLine> lines = codes.stream()
                 .map(code -> new BookedSeatLine(code, null, null))
                 .toList();
@@ -550,7 +637,8 @@ public class BookingService {
                 b.getNumberOfSeats(),
                 b.getTotalAmount(),
                 b.getStatus(),
-                b.getHoldExpiresAt()
+                b.getHoldExpiresAt(),
+                mapAttendees(b)
         );
     }
 }
