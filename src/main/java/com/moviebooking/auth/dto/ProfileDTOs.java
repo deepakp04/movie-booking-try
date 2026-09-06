@@ -47,4 +47,60 @@ public class ProfileDTOs {
             @NotBlank(message = "Date of birth is required")
             String dateOfBirth
     ) {}
+
+    // ------------------------------------------------------------------
+    // Email change with OTP verification
+    // ------------------------------------------------------------------
+
+    /**
+     * Step 1: Request OTP to change email.
+     * Sends OTP to the CURRENT email address.
+     */
+    public record RequestEmailChangeRequest(
+            @NotBlank(message = "New email is required")
+            @Email(message = "Invalid email address. Enter a valid email, such as name@example.com.")
+            @Size(max = 255, message = "Email must not exceed 255 characters")
+            String newEmail
+    ) {}
+
+    /**
+     * Step 2: Verify OTP and apply email change.
+     */
+    public record VerifyEmailChangeRequest(
+            @NotBlank(message = "New email is required")
+            @Email(message = "Invalid new email address.")
+            String newEmail,
+
+            @NotBlank(message = "OTP is required")
+            @Pattern(regexp = "^\\d{6}$", message = "OTP must be a 6-digit number.")
+            String otp
+    ) {}
+
+    // ------------------------------------------------------------------
+    // Password change with OTP verification
+    // ------------------------------------------------------------------
+
+    /**
+     * Step 1: Request OTP to change password.
+     * Sends OTP to the current email address.
+     * No body needed — user is identified from JWT.
+     */
+    public record RequestPasswordChangeRequest() {}
+
+    /**
+     * Step 2: Verify OTP and set new password.
+     */
+    public record VerifyPasswordChangeRequest(
+            @NotBlank(message = "OTP is required")
+            @Pattern(regexp = "^\\d{6}$", message = "OTP must be a 6-digit number.")
+            String otp,
+
+            @NotBlank(message = "New password is required")
+            @Size(min = 8, max = 64, message = "Password must be between 8 and 64 characters.")
+            @Pattern(
+                    regexp = "^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)(?=.*[@$!%*?&]).{8,64}$",
+                    message = "Password must contain at least 1 uppercase, 1 lowercase, 1 number, and 1 special character (@$!%*?&)."
+            )
+            String newPassword
+    ) {}
 }

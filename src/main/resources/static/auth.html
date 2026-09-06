@@ -140,7 +140,10 @@
                 </div>
                 <div class="form-group">
                     <label for="profileEmail">Email Address</label>
-                    <input type="email" id="profileEmail" placeholder="name@example.com" required>
+                    <div style="display: flex; gap: 8px; align-items: center;">
+                        <input type="email" id="profileEmail" placeholder="name@example.com" required readonly style="flex: 1; background: #0b0c0e; cursor: not-allowed;">
+                        <button type="button" class="btn btn-secondary btn-sm" onclick="showChangeEmailModal()" style="white-space: nowrap;">Change</button>
+                    </div>
                 </div>
                 <div class="form-group">
                     <label for="profilePhone">Phone Number <span style="color: #71717a; font-size: 0.75rem;">(with country code)</span></label>
@@ -152,9 +155,55 @@
                 </div>
                 <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 8px;">Save Profile</button>
             </form>
+            <hr class="divider" style="margin: 20px 0;">
+            <button type="button" class="btn btn-secondary" onclick="showChangePasswordModal()" style="width: 100%;">🔑 Change Password</button>
         </div>
 
-        <!-- View 7: My Bookings -->
+        <!-- View 7: Change Email OTP -->
+        <div id="changeEmailView" class="auth-card hidden" style="max-width: 500px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <h2>Change Email</h2>
+                <button type="button" class="btn btn-secondary btn-sm" onclick="switchView('profileView')">← Back</button>
+            </div>
+            <p class="info-text">An OTP will be sent to your <strong>current email</strong> to verify this change.</p>
+            <form id="changeEmailForm" novalidate>
+                <div class="form-group">
+                    <label for="newEmailInput">New Email Address</label>
+                    <input type="email" id="newEmailInput" placeholder="name@example.com" required>
+                </div>
+                <div id="emailOtpGroup" class="form-group hidden">
+                    <label for="emailOtpInput">Enter 6-Digit OTP</label>
+                    <input type="text" id="emailOtpInput" maxlength="6" pattern="\d{6}" placeholder="123456" required autocomplete="off">
+                </div>
+                <button type="submit" class="btn btn-primary" id="emailChangeSubmitBtn" style="width: 100%;">Send OTP</button>
+            </form>
+        </div>
+
+        <!-- View 8: Change Password OTP -->
+        <div id="changePasswordView" class="auth-card hidden" style="max-width: 500px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <h2>Change Password</h2>
+                <button type="button" class="btn btn-secondary btn-sm" onclick="switchView('profileView')">← Back</button>
+            </div>
+            <p class="info-text">An OTP will be sent to your <strong>current email</strong> to verify this change.</p>
+            <form id="changePasswordForm" novalidate>
+                <div id="passwordOtpGroup" class="form-group hidden">
+                    <label for="passwordOtpInput">Enter 6-Digit OTP</label>
+                    <input type="text" id="passwordOtpInput" maxlength="6" pattern="\d{6}" placeholder="123456" required autocomplete="off">
+                </div>
+                <div id="newPasswordField" class="form-group hidden">
+                    <label for="newPasswordInput">New Password</label>
+                    <input type="password" id="newPasswordInput" placeholder="Min 8 chars, 1 Upper, 1 Special, 1 Num" required>
+                </div>
+                <div id="confirmPasswordField" class="form-group hidden">
+                    <label for="confirmPasswordInput">Confirm New Password</label>
+                    <input type="password" id="confirmPasswordInput" placeholder="Re-enter new password" required>
+                </div>
+                <button type="submit" class="btn btn-primary" id="passwordChangeSubmitBtn" style="width: 100%;">Send OTP</button>
+            </form>
+        </div>
+
+        <!-- View 9: My Bookings -->
         <div id="myBookingsView" class="auth-card hidden" style="max-width: 900px;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
                 <h2>My Bookings</h2>

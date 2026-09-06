@@ -8,5 +8,9 @@ public enum OtpPurpose {
 
     ACCOUNT_DELETION,
     
-    LOGIN
+    LOGIN,
+
+    EMAIL_CHANGE,
+
+    PASSWORD_CHANGE
 }

@@ -18,6 +18,8 @@ function switchView(viewId) {
         "forgotPasswordView",
         "accountSettingsView",
         "profileView",
+        "changeEmailView",
+        "changePasswordView",
         "myBookingsView"
     ];
     views.forEach(id => {
@@ -681,7 +683,7 @@ document.getElementById('profileForm')?.addEventListener('submit', async (e) => 
     if (name.length < 2) {
         setFieldError('profileName', 'Name must contain at least 2 characters.');
         hasError = true;
-    } else if (!/^[\p{L}\p{M}\s'\-\.]+$/.test(name)) {
+    } else if (!/^[\p{L}\p{M}\s'\-\.]+$/u.test(name)) {
         setFieldError('profileName', 'Name contains unsupported characters. Use letters, spaces, hyphens, apostrophes, or periods.');
         hasError = true;
     }
@@ -731,6 +733,112 @@ document.getElementById('profileForm')?.addEventListener('submit', async (e) => 
             localStorage.setItem('userEmail', result.data.email);
         }
     } catch (_) {}
+});
+
+// --- Email Change with OTP ---
+
+let changeEmailState = { step: 'request', newEmail: '' };
+
+function showChangeEmailModal() {
+    changeEmailState = { step: 'request', newEmail: '' };
+    document.getElementById('newEmailInput').value = '';
+    document.getElementById('emailOtpInput').value = '';
+    document.getElementById('emailOtpGroup').classList.add('hidden');
+    document.getElementById('emailChangeSubmitBtn').textContent = 'Send OTP';
+    switchView('changeEmailView');
+}
+
+document.getElementById('changeEmailForm')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    clearAllErrors();
+
+    if (changeEmailState.step === 'request') {
+        const newEmail = document.getElementById('newEmailInput').value.trim();
+        if (!RegexRules.email.test(newEmail)) {
+            return setFieldError('newEmailInput', 'Invalid email address.');
+        }
+        try {
+            await apiCall('/profile/request-email-change', { newEmail }, 'POST', true);
+            changeEmailState.newEmail = newEmail;
+            changeEmailState.step = 'verify';
+            document.getElementById('emailOtpGroup').classList.remove('hidden');
+            document.getElementById('emailChangeSubmitBtn').textContent = 'Verify & Update';
+            showAlert('OTP sent to your current email address.', 'success');
+        } catch (_) {}
+    } else {
+        const otp = document.getElementById('emailOtpInput').value.trim();
+        if (!RegexRules.otp.test(otp)) {
+            return setFieldError('emailOtpInput', 'Enter a valid 6-digit OTP.');
+        }
+        try {
+            await apiCall('/profile/verify-email-change', {
+                newEmail: changeEmailState.newEmail,
+                otp
+            }, 'POST', true);
+            showAlert('Email address updated successfully!', 'success');
+            // Refresh profile and go back
+            setTimeout(() => loadAndShowProfile(), 1000);
+        } catch (_) {}
+    }
+});
+
+// --- Password Change with OTP ---
+
+let changePasswordState = { step: 'request' };
+
+function showChangePasswordModal() {
+    changePasswordState = { step: 'request' };
+    document.getElementById('passwordOtpInput').value = '';
+    document.getElementById('newPasswordInput').value = '';
+    document.getElementById('confirmPasswordInput').value = '';
+    document.getElementById('passwordOtpGroup').classList.add('hidden');
+    document.getElementById('newPasswordField').classList.add('hidden');
+    document.getElementById('confirmPasswordField').classList.add('hidden');
+    document.getElementById('passwordChangeSubmitBtn').textContent = 'Send OTP';
+    switchView('changePasswordView');
+}
+
+document.getElementById('changePasswordForm')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    clearAllErrors();
+
+    if (changePasswordState.step === 'request') {
+        try {
+            await apiCall('/profile/request-password-change', {}, 'POST', true);
+            changePasswordState.step = 'verify';
+            document.getElementById('passwordOtpGroup').classList.remove('hidden');
+            document.getElementById('newPasswordField').classList.remove('hidden');
+            document.getElementById('confirmPasswordField').classList.remove('hidden');
+            document.getElementById('passwordChangeSubmitBtn').textContent = 'Verify & Update Password';
+            showAlert('OTP sent to your email address.', 'success');
+        } catch (_) {}
+    } else {
+        const otp = document.getElementById('passwordOtpInput').value.trim();
+        const newPassword = document.getElementById('newPasswordInput').value;
+        const confirmPassword = document.getElementById('confirmPasswordInput').value;
+
+        if (!RegexRules.otp.test(otp)) {
+            return setFieldError('passwordOtpInput', 'Enter a valid 6-digit OTP.');
+        }
+        if (!RegexRules.password.test(newPassword)) {
+            return setFieldError('newPasswordInput', 'Password must contain 1 uppercase, 1 lowercase, 1 number, 1 special character (@$!%*?&), and be 8-64 characters.');
+        }
+        if (newPassword !== confirmPassword) {
+            return setFieldError('confirmPasswordInput', 'Passwords do not match.');
+        }
+        try {
+            await apiCall('/profile/verify-password-change', {
+                otp,
+                newPassword
+            }, 'POST', true);
+            showAlert('Password updated successfully! Please log in again on all devices.', 'success');
+            // Force logout after password change
+            setTimeout(() => {
+                localStorage.clear();
+                switchView('loginView');
+            }, 2000);
+        } catch (_) {}
+    }
 });
 
 async function cancelBooking(bookingId) {

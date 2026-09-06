@@ -43,8 +43,7 @@ function checkAuthState() {
     const authNav = document.getElementById('authNav');
     if (isAuthenticated()) {
         authNav.innerHTML = `
-            <button class="btn btn-secondary btn-sm" onclick="window.location.href='/auth.html'">My Account</button>
-            <button class="btn btn-primary btn-sm" onclick="viewMyBookings()" style="margin-left: 8px;">🎬 My Bookings</button>
+            <button class="btn btn-primary btn-sm" onclick="window.location.href='/auth.html'">My Account</button>
         `;
     } else {
         authNav.innerHTML = `<button class="btn btn-primary btn-sm" onclick="redirectToLogin()">Sign In</button>`;
@@ -969,9 +968,11 @@ function renderAttendeeForms() {
         card.dataset.seat = seatCode;
 
         const isSelf = bookingType === 'self';
-        const name = isSelf ? (userProfile?.name || '') : '';
-        const dob = isSelf ? (userProfile?.dateOfBirth || '') : '';
-        const phone = isSelf ? (userProfile?.phone || '') : '';
+        // Only auto-fill the FIRST ticket with user details; others are blank
+        const isFirst = index === 0;
+        const name = (isSelf && isFirst) ? (userProfile?.name || '') : '';
+        const dob = (isSelf && isFirst) ? (userProfile?.dateOfBirth || '') : '';
+        const phone = (isSelf && isFirst) ? (userProfile?.phone || '') : '';
         const isPhoneRequired = index === 0; // First seat always requires phone input
 
         card.innerHTML = `

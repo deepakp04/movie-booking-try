@@ -2,6 +2,7 @@ package com.moviebooking.auth.controller;
 
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -13,7 +14,11 @@ import com.moviebooking.auth.dto.LoginRequest;
 import com.moviebooking.auth.dto.LoginResponse;
 import com.moviebooking.auth.dto.LogoutRequest;
 import com.moviebooking.auth.dto.ProfileDTOs.GetProfileResponse;
+import com.moviebooking.auth.dto.ProfileDTOs.RequestEmailChangeRequest;
+import com.moviebooking.auth.dto.ProfileDTOs.RequestPasswordChangeRequest;
 import com.moviebooking.auth.dto.ProfileDTOs.UpdateProfileRequest;
+import com.moviebooking.auth.dto.ProfileDTOs.VerifyEmailChangeRequest;
+import com.moviebooking.auth.dto.ProfileDTOs.VerifyPasswordChangeRequest;
 import com.moviebooking.auth.dto.RefreshTokenRequest;
 import com.moviebooking.auth.dto.RegisterRequest;
 import com.moviebooking.auth.dto.RegisterResponse;
@@ -244,5 +249,41 @@ public class AuthController {
             @Valid @RequestBody UpdateProfileRequest request) {
         GetProfileResponse response = profileService.updateProfile(request);
         return new ApiResponse<>(true, "Profile updated successfully", response);
+    }
+
+    // ------------------------------------------------------------------
+    // Email change with OTP
+    // ------------------------------------------------------------------
+
+    @PostMapping("/profile/request-email-change")
+    public ApiResponse<String> requestEmailChange(
+            @Valid @RequestBody RequestEmailChangeRequest request) {
+        profileService.requestEmailChange(request);
+        return new ApiResponse<>(true, "OTP sent to your current email address.", null);
+    }
+
+    @PostMapping("/profile/verify-email-change")
+    public ApiResponse<String> verifyEmailChange(
+            @Valid @RequestBody VerifyEmailChangeRequest request) {
+        profileService.verifyEmailChange(request);
+        return new ApiResponse<>(true, "Email address updated successfully.", null);
+    }
+
+    // ------------------------------------------------------------------
+    // Password change with OTP
+    // ------------------------------------------------------------------
+
+    @PostMapping("/profile/request-password-change")
+    public ApiResponse<String> requestPasswordChange(
+            @Valid @RequestBody RequestPasswordChangeRequest request) {
+        profileService.requestPasswordChange(request);
+        return new ApiResponse<>(true, "OTP sent to your email address.", null);
+    }
+
+    @PostMapping("/profile/verify-password-change")
+    public ApiResponse<String> verifyPasswordChange(
+            @Valid @RequestBody VerifyPasswordChangeRequest request) {
+        profileService.verifyPasswordChange(request);
+        return new ApiResponse<>(true, "Password updated successfully. Please log in again on all devices.", null);
     }
 }
