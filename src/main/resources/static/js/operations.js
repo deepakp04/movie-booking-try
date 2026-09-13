@@ -9,20 +9,7 @@
 const OPS_API_BASE = window.location.pathname.includes('owner.html') ? '/api/owner' : '/api/admin';
 
 // ================= INITIALIZATION =================
-
-document.addEventListener('DOMContentLoaded', () => {
-    // Load dropdowns when the operations tab is activated
-    // We hook into the switchTab function to load data on first view
-    const origSwitchTab = window.switchTab;
-    if (typeof origSwitchTab === 'function') {
-        window.switchTab = function(tabId) {
-            origSwitchTab(tabId);
-            if (tabId === 'operationsTab') {
-                opsInit();
-            }
-        };
-    }
-});
+// opsInit() is called from admin.js/owner.js when the Operations tab is first activated.
 
 let opsInitialized = false;
 

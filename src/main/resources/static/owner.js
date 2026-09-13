@@ -94,6 +94,11 @@ function switchTab(tabId) {
         if (dateTo) dateTo.value = defaultDateTo();
         initAnalytics();
     }
+
+    // Initialize operations tab on first visit
+    if (tabId === 'operationsTab' && typeof opsInit === 'function') {
+        opsInit();
+    }
 }
 
 function showAlert(message, type = 'error') {
