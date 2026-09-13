@@ -14,6 +14,7 @@ import com.moviebooking.payment.dto.PaymentResponse;
 import com.moviebooking.payment.dto.VerifyPaymentRequest;
 import com.moviebooking.payment.model.PaymentTransaction;
 import com.moviebooking.payment.repository.PaymentTransactionRepository;
+import com.moviebooking.mail.service.BookingEmailService;
 import com.moviebooking.stream.dto.SeatUpdateEvent;
 import com.moviebooking.stream.service.SeatStreamService;
 import org.json.JSONObject;
@@ -50,15 +51,18 @@ public class PaymentService {
     private final BookingRepository bookingRepository;
     private final ShowSeatRepository showSeatRepository;
     private final SeatStreamService seatStreamService;
+    private final BookingEmailService bookingEmailService;
 
     public PaymentService(PaymentTransactionRepository paymentRepository,
                          BookingRepository bookingRepository,
                          ShowSeatRepository showSeatRepository,
-                         SeatStreamService seatStreamService) {
+                         SeatStreamService seatStreamService,
+                         BookingEmailService bookingEmailService) {
         this.paymentRepository = paymentRepository;
         this.bookingRepository = bookingRepository;
         this.showSeatRepository = showSeatRepository;
         this.seatStreamService = seatStreamService;
+        this.bookingEmailService = bookingEmailService;
     }
 
     /**
@@ -177,6 +181,9 @@ public class PaymentService {
             // Mark HELD seats as BOOKED so analytics revenue counting works
             confirmSeatsForBooking(booking);
             
+            // Queue confirmation email (async, outbox pattern)
+            bookingEmailService.queueConfirmationEmail(booking);
+            
             log.info("Payment verified successfully. Booking {} confirmed.", booking.getId());
             
             return new PaymentResponse(
@@ -254,6 +261,8 @@ public class PaymentService {
                 booking.setStatus(BookingStatus.CONFIRMED);
                 bookingRepository.save(booking);
                 confirmSeatsForBooking(booking);
+                // Queue confirmation email (async, outbox pattern)
+                bookingEmailService.queueConfirmationEmail(booking);
                 log.info("Booking {} confirmed via webhook", booking.getId());
             } else if (booking.getStatus() == BookingStatus.CONFIRMED) {
                 // Already confirmed (idempotent — callback arrived first)

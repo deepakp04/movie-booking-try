@@ -21,6 +21,7 @@ import com.moviebooking.catalog.repository.ShowRepository;
 import com.moviebooking.catalog.service.ShowPricingService;
 import com.moviebooking.common.exception.BusinessException;
 import com.moviebooking.common.exception.ResourceNotFoundException;
+import com.moviebooking.mail.service.BookingEmailService;
 import com.moviebooking.stream.dto.SeatUpdateEvent;
 import com.moviebooking.stream.service.SeatStreamService;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -61,6 +62,7 @@ public class BookingService {
     private final ScreenSeatRepository screenSeatRepository;
     private final ShowPricingService showPricing;
     private final SeatStreamService seatStreamService;
+    private final BookingEmailService bookingEmailService;
 
     public BookingService(ShowRepository showRepository,
                            ShowSeatRepository showSeatRepository,
@@ -69,7 +71,8 @@ public class BookingService {
                            BookingAttendeeRepository attendeeRepository,
                            ScreenSeatRepository screenSeatRepository,
                            ShowPricingService showPricing,
-                           SeatStreamService seatStreamService) {
+                           SeatStreamService seatStreamService,
+                           BookingEmailService bookingEmailService) {
         this.showRepository = showRepository;
         this.showSeatRepository = showSeatRepository;
         this.bookingRepository = bookingRepository;
@@ -78,6 +81,7 @@ public class BookingService {
         this.screenSeatRepository = screenSeatRepository;
         this.showPricing = showPricing;
         this.seatStreamService = seatStreamService;
+        this.bookingEmailService = bookingEmailService;
     }
 
     private User currentUser() {
@@ -512,10 +516,13 @@ public class BookingService {
         Booking booking = bookingRepository.findByIdAndUserId(bookingId, user.getId())
                 .orElseThrow(() -> new ResourceNotFoundException("Booking not found with ID: " + bookingId));
 
-        if (booking.getStatus() != BookingStatus.PENDING_PAYMENT) {
-            throw new BusinessException("Only a pending booking can be cancelled.");
+        BookingStatus oldStatus = booking.getStatus();
+
+        if (oldStatus != BookingStatus.PENDING_PAYMENT && oldStatus != BookingStatus.CONFIRMED) {
+            throw new BusinessException("This booking cannot be cancelled. Status: " + oldStatus);
         }
 
+        // Release seats
         List<String> codes = List.of(booking.getSeatCodes().split(","));
         List<ShowSeat> seats = showSeatRepository.findForUpdate(booking.getShow().getId(), codes);
         for (ShowSeat s : seats) {
@@ -530,6 +537,11 @@ public class BookingService {
 
         booking.setStatus(BookingStatus.CANCELLED);
         bookingRepository.save(booking);
+
+        // Send cancellation email only for CONFIRMED bookings (paid bookings)
+        if (oldStatus == BookingStatus.CONFIRMED) {
+            bookingEmailService.queueCancellationEmail(booking);
+        }
     }
 
     @Transactional
