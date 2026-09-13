@@ -167,15 +167,26 @@ public class BookingEmailService {
         String customerEmail = escapeHtml(user.getEmail());
         String customerPhone = user.getPhone() != null ? user.getPhone() : "Not provided";
 
+        String ticketPlural = booking.getNumberOfSeats() > 1 ? "s" : "";
+
         return String.format(confirmationTemplate(),
+                // Header: bookingId, bookedOn
                 bookingId, bookedOn,
+                // Movie: title, info, ratingBadge, showDate, showTime
                 escapeHtml(movieTitle), movieInfo, ratingBadge, showDate, showTime,
+                // Theatre: name, screen, address, city
                 escapeHtml(theatreName), escapeHtml(screenName), escapeHtml(theatreAddress), escapeHtml(cityName),
+                // Seats
                 seatRows.toString(),
-                booking.getNumberOfSeats(),
-                booking.getTotalAmount(),
-                paymentStatus, paymentMethod, transactionId, paymentId,
+                // Ticket count + plural
+                booking.getNumberOfSeats(), ticketPlural,
+                // Payment: total, status, method, transactionId, paymentId
+                booking.getTotalAmount(), paymentStatus, paymentMethod, transactionId, paymentId,
+                // Digital ticket: bookingId, movie, date, time, theatre, screen
+                bookingId, escapeHtml(movieTitle), showDate, showTime, escapeHtml(theatreName), escapeHtml(screenName),
+                // Customer: name, email, phone
                 customerName, customerEmail, customerPhone,
+                // Support section: bookingId
                 bookingId
         );
     }
@@ -419,7 +430,7 @@ public class BookingEmailService {
             <h3 style="margin:0 0 8px;color:#71717a;font-size:11px;letter-spacing:2px;text-transform:uppercase;">Theatre</h3>
             <p style="margin:0;color:#e4e4e7;font-size:15px;font-weight:600;">%s</p>
             <p style="margin:4px 0;color:#a1a1aa;font-size:13px;">%s</p>
-            <p style="margin:0;color:#71717a;font-size:13px;">%s</p>
+            <p style="margin:0;color:#71717a;font-size:13px;">%s, %s</p>
         </td></tr>
 
         <!-- Cancelled Seats -->

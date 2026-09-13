@@ -27,6 +27,8 @@ import com.moviebooking.stream.service.SeatStreamService;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
@@ -45,6 +47,8 @@ import java.util.stream.Collectors;
 
 @Service
 public class BookingService {
+
+    private static final Logger log = LoggerFactory.getLogger(BookingService.class);
 
     private static final int MAX_SEATS_PER_BOOKING = 10;
     private static final int HOLD_MINUTES = 20;
@@ -539,8 +543,14 @@ public class BookingService {
         bookingRepository.save(booking);
 
         // Send cancellation email only for CONFIRMED bookings (paid bookings)
+        // Wrapped in try-catch: email failure must NOT prevent cancellation
         if (oldStatus == BookingStatus.CONFIRMED) {
-            bookingEmailService.queueCancellationEmail(booking);
+            try {
+                bookingEmailService.queueCancellationEmail(booking);
+            } catch (Exception emailEx) {
+                log.error("Failed to queue cancellation email for booking {}: {}",
+                        booking.getId(), emailEx.getMessage(), emailEx);
+            }
         }
     }
 

@@ -182,7 +182,13 @@ public class PaymentService {
             confirmSeatsForBooking(booking);
             
             // Queue confirmation email (async, outbox pattern)
-            bookingEmailService.queueConfirmationEmail(booking);
+            // Wrapped in try-catch: email failure must NOT prevent booking confirmation
+            try {
+                bookingEmailService.queueConfirmationEmail(booking);
+            } catch (Exception emailEx) {
+                log.error("Failed to queue confirmation email for booking {}: {}",
+                        booking.getId(), emailEx.getMessage(), emailEx);
+            }
             
             log.info("Payment verified successfully. Booking {} confirmed.", booking.getId());
             
@@ -262,7 +268,13 @@ public class PaymentService {
                 bookingRepository.save(booking);
                 confirmSeatsForBooking(booking);
                 // Queue confirmation email (async, outbox pattern)
-                bookingEmailService.queueConfirmationEmail(booking);
+                // Wrapped in try-catch: email failure must NOT prevent booking confirmation
+                try {
+                    bookingEmailService.queueConfirmationEmail(booking);
+                } catch (Exception emailEx) {
+                    log.error("Failed to queue confirmation email for booking {} via webhook: {}",
+                            booking.getId(), emailEx.getMessage(), emailEx);
+                }
                 log.info("Booking {} confirmed via webhook", booking.getId());
             } else if (booking.getStatus() == BookingStatus.CONFIRMED) {
                 // Already confirmed (idempotent — callback arrived first)
