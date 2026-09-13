@@ -169,9 +169,9 @@ public class SeatConfigService {
             List<String> shows = showSeatRepository.findMaterializedShowLabelsForScreen(screenId);
             String detail = shows.isEmpty() ? "" : " Affected: " + String.join(", ", shows) + ".";
             throw new BusinessException(
-                    "This screen's layout is locked because shows on it have already opened their "
+                    "This screen's layout is locked because upcoming shows on it have already opened their "
                   + "seat maps." + detail
-                  + " Cancel those shows before changing the seating.");
+                  + " Cancel those shows or wait for them to finish before changing the seating.");
         }
     }
 

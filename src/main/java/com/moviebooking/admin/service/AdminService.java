@@ -679,8 +679,8 @@ public class AdminService {
         long locked = showSeatRepository.countMaterializedForScreen(screenId);
         boolean editable = (locked == 0);
         String lockReason = editable ? null
-                : "Shows on this screen have already opened their seat maps. "
-                + "Cancel those shows to change the seating.";
+                : "Upcoming shows on this screen have already opened their seat maps. "
+                + "Cancel or wait for those shows to finish before changing the seating.";
 
         return new ScreenLayoutDetailResponse(
                 screenId, screen.getName(), screen.getTotalSeats(),

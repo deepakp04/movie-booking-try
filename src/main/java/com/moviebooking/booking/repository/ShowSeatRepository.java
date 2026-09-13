@@ -33,13 +33,15 @@ public interface ShowSeatRepository extends JpaRepository<ShowSeat, Long> {
     // a show that has never been opened has no seats yet and does not block.
     @Query("SELECT COUNT(ss) FROM ShowSeat ss"
          + " WHERE ss.show.screen.id = :screenId"
-         + " AND ss.show.isDeleted = false")
+         + " AND ss.show.isDeleted = false"
+         + " AND ss.show.startTime >= CURRENT_TIMESTAMP")
     long countMaterializedForScreen(@Param("screenId") Long screenId);
 
     @Query("SELECT DISTINCT CONCAT(ss.show.movie.title, ' at ', ss.show.startTime)"
          + " FROM ShowSeat ss"
          + " WHERE ss.show.screen.id = :screenId"
-         + " AND ss.show.isDeleted = false")
+         + " AND ss.show.isDeleted = false"
+         + " AND ss.show.startTime >= CURRENT_TIMESTAMP")
     List<String> findMaterializedShowLabelsForScreen(@Param("screenId") Long screenId);
 
     long countByShowIdAndStatus(Long showId, com.moviebooking.booking.model.SeatStatus status);
