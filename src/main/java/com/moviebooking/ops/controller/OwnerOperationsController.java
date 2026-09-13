@@ -6,6 +6,7 @@ import com.moviebooking.catalog.model.Theatre;
 import com.moviebooking.catalog.repository.TheatreRepository;
 import com.moviebooking.common.exception.ResourceNotFoundException;
 import com.moviebooking.common.response.ApiResponse;
+import com.moviebooking.ops.dto.*;
 import com.moviebooking.ops.dto.OpsDTOs.*;
 import com.moviebooking.ops.model.AuditAction;
 import com.moviebooking.ops.service.AuditService;
