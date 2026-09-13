@@ -169,6 +169,33 @@ public class OpsDTOs {
 
     // ================= BOOKING SUMMARY (for report snapshots) =================
 
+    // ================= DROPDOWNS =================
+
+    public record ShowDropdownItem(
+        Long id,
+        String movieTitle,
+        String screenName,
+        String theatreName,
+        String cityName,
+        LocalDateTime startTime,
+        String language,
+        String format,
+        Long theatreId
+    ) {}
+
+    public record TheatreDropdownItem(
+        Long id,
+        String name,
+        String cityName
+    ) {}
+
+    public record CityDropdownItem(
+        Long id,
+        String name
+    ) {}
+
+    // ================= BOOKING SUMMARY (for report snapshots) =================
+
     public record BookingSummarySnapshot(
         Long confirmedBookings,
         Long confirmedTickets,

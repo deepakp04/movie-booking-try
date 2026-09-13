@@ -67,6 +67,30 @@ public class OwnerOperationsController {
                         "No theatre is currently assigned to your account. Contact an administrator."));
     }
 
+    // ================= DROPDOWNS =================
+
+    @GetMapping("/shows")
+    public ApiResponse<List<OpsDTOs.ShowDropdownItem>> getShowsDropdown(
+            @RequestParam(required = false, defaultValue = "all") String scope,
+            HttpServletRequest request) {
+
+        Theatre theatre = currentOwnersTheatre();
+        List<OpsDTOs.ShowDropdownItem> shows = operationsService.getShowsByTheatre(theatre.getId());
+        return ApiResponse.success("Shows loaded successfully", shows);
+    }
+
+    @GetMapping("/theatres")
+    public ApiResponse<OpsDTOs.TheatreDropdownItem> getMyTheatre(
+            HttpServletRequest request) {
+
+        Theatre theatre = currentOwnersTheatre();
+        OpsDTOs.TheatreDropdownItem item = new OpsDTOs.TheatreDropdownItem(
+                theatre.getId(), theatre.getName(),
+                theatre.getCity() != null ? theatre.getCity().getName() : ""
+        );
+        return ApiResponse.success("Theatre loaded successfully", item);
+    }
+
     // ================= SHOW REPORTS =================
 
     @GetMapping("/reports/shows/{showId}")

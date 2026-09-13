@@ -308,4 +308,43 @@ public class OperationsService {
             throw new BusinessException("Access denied: show does not belong to your theatre.");
         }
     }
+
+    // ================= DROPDOWNS =================
+
+    public List<TheatreDropdownItem> getAllTheatres() {
+        return theatreRepository.findByIsDeletedFalseOrderByNameAsc().stream()
+                .map(t -> new TheatreDropdownItem(
+                        t.getId(),
+                        t.getName(),
+                        t.getCity() != null ? t.getCity().getName() : ""
+                ))
+                .toList();
+    }
+
+    public List<ShowDropdownItem> getAllShows() {
+        return showRepository.findByIsDeletedFalseOrderByStartTimeDesc().stream()
+                .map(this::toShowDropdown)
+                .toList();
+    }
+
+    public List<ShowDropdownItem> getShowsByTheatre(Long theatreId) {
+        return showRepository.findByIsDeletedFalseOrderByStartTimeDesc().stream()
+                .filter(s -> s.getScreen().getTheatre().getId().equals(theatreId))
+                .map(this::toShowDropdown)
+                .toList();
+    }
+
+    private ShowDropdownItem toShowDropdown(Show s) {
+        return new ShowDropdownItem(
+                s.getId(),
+                s.getMovie().getTitle(),
+                s.getScreen().getName(),
+                s.getScreen().getTheatre().getName(),
+                s.getScreen().getTheatre().getCity().getName(),
+                s.getStartTime(),
+                s.getLanguage().name(),
+                s.getFormat().name(),
+                s.getScreen().getTheatre().getId()
+        );
+    }
 }

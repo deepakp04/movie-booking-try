@@ -49,6 +49,31 @@ public class AdminOperationsController {
         this.reportRepository = reportRepository;
     }
 
+    // ================= DROPDOWNS =================
+
+    @GetMapping("/shows")
+    public ApiResponse<List<OpsDTOs.ShowDropdownItem>> getShowsDropdown(
+            @RequestParam(required = false, defaultValue = "all") String scope,
+            @RequestParam(required = false) Long theatreId,
+            HttpServletRequest request) {
+
+        List<OpsDTOs.ShowDropdownItem> shows;
+        if (theatreId != null) {
+            shows = operationsService.getShowsByTheatre(theatreId);
+        } else {
+            shows = operationsService.getAllShows();
+        }
+        return ApiResponse.success("Shows loaded successfully", shows);
+    }
+
+    @GetMapping("/theatres")
+    public ApiResponse<List<OpsDTOs.TheatreDropdownItem>> getTheatresDropdown(
+            HttpServletRequest request) {
+
+        List<OpsDTOs.TheatreDropdownItem> theatres = operationsService.getAllTheatres();
+        return ApiResponse.success("Theatres loaded successfully", theatres);
+    }
+
     // ================= SHOW REPORTS =================
 
     @GetMapping("/reports/shows/{showId}")
