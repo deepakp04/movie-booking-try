@@ -20,9 +20,10 @@ function opsInit() {
     opsLoadIncidentsList();
     opsLoadReportsList();
 
-    // For admin, also load theatres dropdown
+    // For admin, also load filter options and theatres dropdown
     if (OPS_API_BASE === '/api/admin') {
         opsLoadTheatresDropdown();
+        opsLoadFilterOptions();
     }
 
     // Set default date range (last 30 days)
@@ -32,6 +33,11 @@ function opsInit() {
     const dateTo = document.getElementById('opsDateTo');
     if (dateFrom) dateFrom.value = thirtyDaysAgo.toISOString().split('T')[0];
     if (dateTo) dateTo.value = today.toISOString().split('T')[0];
+    // Also set default date filters for show report
+    const filterFrom = document.getElementById('opsFilterDateFrom');
+    const filterTo = document.getElementById('opsFilterDateTo');
+    if (filterFrom && !filterFrom.value) filterFrom.value = thirtyDaysAgo.toISOString().split('T')[0];
+    if (filterTo && !filterTo.value) filterTo.value = today.toISOString().split('T')[0];
 }
 
 // ================= SECTION NAVIGATION =================
@@ -68,7 +74,12 @@ async function opsApiCall(endpoint, method = 'GET', body = null) {
         return response;
     }
 
-    const result = await response.json();
+    let result;
+    try {
+        result = await response.json();
+    } catch (e) {
+        throw new Error(`HTTP ${response.status}: Non-JSON response`);
+    }
     if (!response.ok || (result.success !== undefined && !result.success)) {
         throw new Error(result.message || `HTTP ${response.status}`);
     }
@@ -124,6 +135,142 @@ async function opsLoadTheatresDropdown() {
     } catch (e) {
         console.error('Failed to load theatres:', e);
     }
+}
+
+// ================= FILTER OPTIONS (Admin only) =================
+
+let opsFilterData = { theatres: [], movies: [], screens: [] };
+
+async function opsLoadFilterOptions() {
+    try {
+        const result = await opsApiCall('/filter-options');
+        if (!result || !result.data) return;
+        opsFilterData = result.data;
+        populateFilterDropdowns();
+    } catch (e) {
+        console.error('Failed to load filter options:', e);
+    }
+}
+
+function populateFilterDropdowns() {
+    // Populate theatre filter
+    const theatreSelect = document.getElementById('opsFilterTheatre');
+    if (theatreSelect) {
+        while (theatreSelect.options.length > 1) theatreSelect.remove(1);
+        (opsFilterData.theatres || []).forEach(t => {
+            const opt = document.createElement('option');
+            opt.value = t.id;
+            opt.textContent = t.name;
+            theatreSelect.appendChild(opt);
+        });
+    }
+    // Populate movie filter
+    const movieSelect = document.getElementById('opsFilterMovie');
+    if (movieSelect) {
+        while (movieSelect.options.length > 1) movieSelect.remove(1);
+        (opsFilterData.movies || []).forEach(m => {
+            const opt = document.createElement('option');
+            opt.value = m.title;
+            opt.textContent = m.title;
+            movieSelect.appendChild(opt);
+        });
+    }
+    // Populate screen filter
+    const screenSelect = document.getElementById('opsFilterScreen');
+    if (screenSelect) {
+        while (screenSelect.options.length > 1) screenSelect.remove(1);
+        (opsFilterData.screens || []).forEach(s => {
+            const opt = document.createElement('option');
+            opt.value = s.name + '|' + s.theatreName;
+            opt.textContent = s.name + ' — ' + s.theatreName;
+            screenSelect.appendChild(opt);
+        });
+    }
+}
+
+function opsApplyShowFilters() {
+    const dateFrom = document.getElementById('opsFilterDateFrom')?.value || '';
+    const dateTo = document.getElementById('opsFilterDateTo')?.value || '';
+    const theatreId = document.getElementById('opsFilterTheatre')?.value || '';
+    const movieTitle = document.getElementById('opsFilterMovie')?.value || '';
+    const screenVal = document.getElementById('opsFilterScreen')?.value || '';
+
+    let url = '/shows?scope=all';
+    if (dateFrom) url += `&dateFrom=${dateFrom}`;
+    if (dateTo) url += `&dateTo=${dateTo}`;
+    if (theatreId) url += `&theatreId=${theatreId}`;
+
+    opsApiCall(url).then(result => {
+        if (!result) return;
+        let shows = result.data || [];
+        // Client-side filter for movie and screen (since we don't have server endpoints for these)
+        if (movieTitle) shows = shows.filter(s => s.movieTitle === movieTitle);
+        if (screenVal) {
+            const [sName, tName] = screenVal.split('|');
+            shows = shows.filter(s => s.screenName === sName && s.theatreName === tName);
+        }
+        populateShowsSelect(shows);
+    }).catch(e => console.error('Failed to filter shows:', e));
+}
+
+function opsResetShowFilters() {
+    const ids = ['opsFilterDateFrom', 'opsFilterDateTo', 'opsFilterTheatre', 'opsFilterMovie', 'opsFilterScreen'];
+    ids.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.value = '';
+    });
+    opsLoadShowsDropdown();
+}
+
+function opsApplyTHFilters() {
+    const dateFrom = document.getElementById('opsTHFilterDateFrom')?.value || '';
+    const dateTo = document.getElementById('opsTHFilterDateTo')?.value || '';
+    const movieTitle = document.getElementById('opsTHFilterMovie')?.value || '';
+
+    let url = '/shows?scope=all';
+    if (dateFrom) url += `&dateFrom=${dateFrom}`;
+    if (dateTo) url += `&dateTo=${dateTo}`;
+
+    opsApiCall(url).then(result => {
+        if (!result) return;
+        let shows = result.data || [];
+        if (movieTitle) shows = shows.filter(s => s.movieTitle === movieTitle);
+        // Populate TH show select
+        const select = document.getElementById('opsTHShowSelect');
+        if (!select) return;
+        while (select.options.length > 1) select.remove(1);
+        shows.forEach(show => {
+            const opt = document.createElement('option');
+            opt.value = show.id;
+            const date = show.startTime ? new Date(show.startTime).toLocaleDateString() : '';
+            opt.textContent = `${show.movieTitle || 'Movie'} — ${show.screenName || ''} — ${date}`;
+            select.appendChild(opt);
+        });
+    }).catch(e => console.error('Failed to filter TH shows:', e));
+}
+
+function opsResetTHFilters() {
+    ['opsTHFilterDateFrom', 'opsTHFilterDateTo', 'opsTHFilterMovie'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.value = '';
+    });
+    opsLoadShowsDropdown();
+}
+
+function populateShowsSelect(shows) {
+    const selects = ['opsShowSelect', 'opsTHShowSelect'];
+    selects.forEach(id => {
+        const select = document.getElementById(id);
+        if (!select) return;
+        while (select.options.length > 1) select.remove(1);
+        shows.forEach(show => {
+            const opt = document.createElement('option');
+            opt.value = show.id;
+            const date = show.startTime ? new Date(show.startTime).toLocaleDateString() : '';
+            opt.textContent = `${show.movieTitle || 'Movie'} — ${show.screenName || ''} — ${date}`;
+            select.appendChild(opt);
+        });
+    });
 }
 
 // ================= SHOW REPORT =================

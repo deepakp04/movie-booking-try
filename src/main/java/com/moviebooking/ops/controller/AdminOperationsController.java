@@ -55,23 +55,50 @@ public class AdminOperationsController {
     public ApiResponse<List<OpsDTOs.ShowDropdownItem>> getShowsDropdown(
             @RequestParam(required = false, defaultValue = "all") String scope,
             @RequestParam(required = false) Long theatreId,
+            @RequestParam(required = false) Long movieId,
+            @RequestParam(required = false) Long screenId,
+            @RequestParam(required = false) String dateFrom,
+            @RequestParam(required = false) String dateTo,
             HttpServletRequest request) {
 
-        List<OpsDTOs.ShowDropdownItem> shows;
-        if (theatreId != null) {
-            shows = operationsService.getShowsByTheatre(theatreId);
-        } else {
-            shows = operationsService.getAllShows();
-        }
+        List<OpsDTOs.ShowDropdownItem> shows = operationsService.getFilteredShows(
+                theatreId, movieId, screenId, dateFrom, dateTo);
         return ApiResponse.success("Shows loaded successfully", shows);
     }
 
     @GetMapping("/theatres")
     public ApiResponse<List<OpsDTOs.TheatreDropdownItem>> getTheatresDropdown(
+            @RequestParam(required = false) Long cityId,
+            HttpServletRequest request) {
+
+        List<OpsDTOs.TheatreDropdownItem> theatres = operationsService.getFilteredTheatres(cityId);
+        return ApiResponse.success("Theatres loaded successfully", theatres);
+    }
+
+    @GetMapping("/filter-options")
+    public ApiResponse<OpsDTOs.FilterOptionsResponse> getFilterOptions(
             HttpServletRequest request) {
 
         List<OpsDTOs.TheatreDropdownItem> theatres = operationsService.getAllTheatres();
-        return ApiResponse.success("Theatres loaded successfully", theatres);
+        List<OpsDTOs.ShowDropdownItem> allShows = operationsService.getAllShows();
+
+        // Extract unique movies from shows
+        List<OpsDTOs.MovieFilterItem> movies = allShows.stream()
+                .collect(java.util.stream.Collectors.toMap(
+                        OpsDTOs.ShowDropdownItem::movieTitle,
+                        s -> new OpsDTOs.MovieFilterItem(null, s.movieTitle()),
+                        (a, b) -> a))
+                .values().stream().toList();
+
+        // Extract unique screens from shows
+        List<OpsDTOs.ScreenFilterItem> screens = allShows.stream()
+                .collect(java.util.stream.Collectors.toMap(
+                        s -> s.screenName() + "@" + s.theatreName(),
+                        s -> new OpsDTOs.ScreenFilterItem(null, s.screenName(), s.theatreName()),
+                        (a, b) -> a))
+                .values().stream().toList();
+
+        return ApiResponse.success("Filter options loaded", new OpsDTOs.FilterOptionsResponse(theatres, movies, screens));
     }
 
     // ================= SHOW REPORTS =================

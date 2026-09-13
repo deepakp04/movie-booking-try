@@ -1,6 +1,8 @@
 package com.moviebooking.ops.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.moviebooking.auth.entity.User;
 import com.moviebooking.auth.repository.UserRepository;
 import com.moviebooking.common.exception.BusinessException;
@@ -25,7 +27,9 @@ public class ReportService {
 
     private static final Logger log = LoggerFactory.getLogger(ReportService.class);
     private static final DateTimeFormatter DISPLAY_FMT = DateTimeFormatter.ofPattern("dd MMM yyyy, h:mm a", Locale.ENGLISH);
-    private static final ObjectMapper objectMapper = new ObjectMapper();
+    private static final ObjectMapper objectMapper = new ObjectMapper()
+            .registerModule(new JavaTimeModule())
+            .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
 
     private final ReportSnapshotRepository reportRepository;
     private final OperationsService operationsService;

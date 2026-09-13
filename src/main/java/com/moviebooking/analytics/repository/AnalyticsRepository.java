@@ -691,7 +691,7 @@ public class AnalyticsRepository {
 
     public FilterOptionsResponse getFilterOptions(Long restrictToTheatreId) {
         String theatreFilter = restrictToTheatreId != null
-            ? " AND t.id = " + restrictToTheatreId
+            ? " AND t.id = " + restrictToTheatreId + " "
             : "";
 
         String movieSql = """

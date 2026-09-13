@@ -748,11 +748,40 @@
                 <div id="opsShowReport" class="ops-section">
                     <div class="admin-card">
                         <h3>Show Report</h3>
-                        <p class="subtitle">Select a show to view booking details and ticket holders.</p>
+                        <p class="subtitle">Filter and select a show to view booking details and ticket holders.</p>
+                        <div class="analytics-filters" style="margin-bottom: 12px;">
+                            <div class="filter-group">
+                                <label for="opsFilterDateFrom">Date From</label>
+                                <input type="date" id="opsFilterDateFrom" onchange="opsApplyShowFilters()">
+                            </div>
+                            <div class="filter-group">
+                                <label for="opsFilterDateTo">Date To</label>
+                                <input type="date" id="opsFilterDateTo" onchange="opsApplyShowFilters()">
+                            </div>
+                            <div class="filter-group">
+                                <label for="opsFilterTheatre">Theatre</label>
+                                <select id="opsFilterTheatre" onchange="opsApplyShowFilters()">
+                                    <option value="">All Theatres</option>
+                                </select>
+                            </div>
+                            <div class="filter-group">
+                                <label for="opsFilterMovie">Movie</label>
+                                <select id="opsFilterMovie" onchange="opsApplyShowFilters()">
+                                    <option value="">All Movies</option>
+                                </select>
+                            </div>
+                            <div class="filter-group">
+                                <label for="opsFilterScreen">Screen</label>
+                                <select id="opsFilterScreen" onchange="opsApplyShowFilters()">
+                                    <option value="">All Screens</option>
+                                </select>
+                            </div>
+                            <button class="btn btn-secondary btn-sm" onclick="opsResetShowFilters()" style="align-self: flex-end;">Reset</button>
+                        </div>
                         <div class="form-row">
-                            <div class="form-group">
-                                <label for="opsShowSelect">Show</label>
-                                <select id="opsShowSelect" onchange="opsLoadShowReport()">
+                            <div class="form-group" style="flex: 1;">
+                                <label for="opsShowSelect">Select Show</label>
+                                <select id="opsShowSelect" onchange="opsLoadShowReport()" style="width: 100%;">
                                     <option value="" disabled selected>Select Show</option>
                                 </select>
                             </div>
@@ -794,10 +823,27 @@
                         <div style="background: rgba(229,57,53,0.1); border: 1px solid rgba(229,57,53,0.3); border-radius: 6px; padding: 10px 16px; margin-bottom: 16px;">
                             <p style="margin: 0; color: #ff8a80; font-size: 13px;">⚠️ This report contains customer personal information. Access and exports are audit-logged.</p>
                         </div>
+                        <div class="analytics-filters" style="margin-bottom: 12px;">
+                            <div class="filter-group">
+                                <label for="opsTHFilterDateFrom">Date From</label>
+                                <input type="date" id="opsTHFilterDateFrom" onchange="opsApplyTHFilters()">
+                            </div>
+                            <div class="filter-group">
+                                <label for="opsTHFilterDateTo">Date To</label>
+                                <input type="date" id="opsTHFilterDateTo" onchange="opsApplyTHFilters()">
+                            </div>
+                            <div class="filter-group">
+                                <label for="opsTHFilterMovie">Movie</label>
+                                <select id="opsTHFilterMovie" onchange="opsApplyTHFilters()">
+                                    <option value="">All Movies</option>
+                                </select>
+                            </div>
+                            <button class="btn btn-secondary btn-sm" onclick="opsResetTHFilters()" style="align-self: flex-end;">Reset</button>
+                        </div>
                         <div class="form-row">
-                            <div class="form-group">
-                                <label for="opsTHShowSelect">Show</label>
-                                <select id="opsTHShowSelect" onchange="opsLoadTicketHolders()">
+                            <div class="form-group" style="flex: 1;">
+                                <label for="opsTHShowSelect">Select Show</label>
+                                <select id="opsTHShowSelect" onchange="opsLoadTicketHolders()" style="width: 100%;">
                                     <option value="" disabled selected>Select Show</option>
                                 </select>
                             </div>

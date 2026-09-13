@@ -194,6 +194,23 @@ public class OpsDTOs {
         String name
     ) {}
 
+    public record MovieFilterItem(
+        Long id,
+        String title
+    ) {}
+
+    public record ScreenFilterItem(
+        Long id,
+        String name,
+        String theatreName
+    ) {}
+
+    public record FilterOptionsResponse(
+        List<TheatreDropdownItem> theatres,
+        List<MovieFilterItem> movies,
+        List<ScreenFilterItem> screens
+    ) {}
+
     // ================= BOOKING SUMMARY (for report snapshots) =================
 
     public record BookingSummarySnapshot(

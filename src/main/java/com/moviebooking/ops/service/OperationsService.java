@@ -273,14 +273,15 @@ public class OperationsService {
 
             // Get user info
             User user = booking.getUser();
+            if (user == null) continue;
 
             for (ShowSeat seat : bookingSeats) {
                 holders.add(new TicketHolderResponse(
                         booking.getId(),
                         booking.getTransactionId(),
-                        user.getName(),
+                        user.getName() != null ? user.getName() : "",
                         user.getPhone() != null ? user.getPhone() : "",
-                        user.getEmail(),
+                        user.getEmail() != null ? user.getEmail() : "",
                         seat.getSeatCode(),
                         seat.getTierName() != null ? seat.getTierName() : "Standard",
                         seat.getPrice() != null ? seat.getPrice() : BigDecimal.ZERO,
@@ -327,6 +328,37 @@ public class OperationsService {
                 .toList();
     }
 
+    public List<ShowDropdownItem> getFilteredShows(Long theatreId, Long movieId, Long screenId,
+                                                   String dateFrom, String dateTo) {
+        return showRepository.findByIsDeletedFalseOrderByStartTimeDesc().stream()
+                .filter(s -> theatreId == null || s.getScreen().getTheatre().getId().equals(theatreId))
+                .filter(s -> movieId == null || s.getMovie().getId().equals(movieId))
+                .filter(s -> screenId == null || s.getScreen().getId().equals(screenId))
+                .filter(s -> {
+                    if (dateFrom == null || dateFrom.isBlank()) return true;
+                    LocalDateTime from = LocalDate.parse(dateFrom).atStartOfDay();
+                    return !s.getStartTime().isBefore(from);
+                })
+                .filter(s -> {
+                    if (dateTo == null || dateTo.isBlank()) return true;
+                    LocalDateTime to = LocalDate.parse(dateTo).atTime(23, 59, 59);
+                    return !s.getStartTime().isAfter(to);
+                })
+                .map(this::toShowDropdown)
+                .toList();
+    }
+
+    public List<TheatreDropdownItem> getFilteredTheatres(Long cityId) {
+        return theatreRepository.findByIsDeletedFalseOrderByNameAsc().stream()
+                .filter(t -> cityId == null || (t.getCity() != null && t.getCity().getId().equals(cityId)))
+                .map(t -> new TheatreDropdownItem(
+                        t.getId(),
+                        t.getName(),
+                        t.getCity() != null ? t.getCity().getName() : ""
+                ))
+                .toList();
+    }
+
     public List<ShowDropdownItem> getShowsByTheatre(Long theatreId) {
         return showRepository.findByIsDeletedFalseOrderByStartTimeDesc().stream()
                 .filter(s -> s.getScreen().getTheatre().getId().equals(theatreId))
@@ -337,14 +369,14 @@ public class OperationsService {
     private ShowDropdownItem toShowDropdown(Show s) {
         return new ShowDropdownItem(
                 s.getId(),
-                s.getMovie().getTitle(),
-                s.getScreen().getName(),
-                s.getScreen().getTheatre().getName(),
-                s.getScreen().getTheatre().getCity().getName(),
+                s.getMovie() != null ? s.getMovie().getTitle() : "Unknown",
+                s.getScreen() != null ? s.getScreen().getName() : "",
+                s.getScreen() != null && s.getScreen().getTheatre() != null ? s.getScreen().getTheatre().getName() : "",
+                s.getScreen() != null && s.getScreen().getTheatre() != null && s.getScreen().getTheatre().getCity() != null ? s.getScreen().getTheatre().getCity().getName() : "",
                 s.getStartTime(),
-                s.getLanguage().name(),
-                s.getFormat().name(),
-                s.getScreen().getTheatre().getId()
+                s.getLanguage() != null ? s.getLanguage().name() : "",
+                s.getFormat() != null ? s.getFormat().name() : "",
+                s.getScreen() != null && s.getScreen().getTheatre() != null ? s.getScreen().getTheatre().getId() : null
         );
     }
 }
