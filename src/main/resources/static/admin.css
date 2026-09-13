@@ -464,3 +464,42 @@ body {
 .admin-card .divider {
   margin: 18px 0;
 }
+
+/* ================= OPERATIONS & COMPLIANCE ================= */
+
+.ops-section {
+  margin-bottom: 24px;
+}
+
+.badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.badge-success {
+  background: rgba(46, 125, 50, 0.15);
+  color: #66bb6a;
+  border: 1px solid rgba(46, 125, 50, 0.3);
+}
+
+.badge-warning {
+  background: rgba(229, 184, 11, 0.15);
+  color: #e5b80b;
+  border: 1px solid rgba(229, 184, 11, 0.3);
+}
+
+.badge-danger {
+  background: rgba(229, 57, 53, 0.15);
+  color: #ff8a80;
+  border: 1px solid rgba(229, 57, 53, 0.3);
+}
+
+.badge-info {
+  background: rgba(66, 165, 245, 0.15);
+  color: #90caf9;
+  border: 1px solid rgba(66, 165, 245, 0.3);
+}

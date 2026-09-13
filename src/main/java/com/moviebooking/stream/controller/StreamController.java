@@ -46,8 +46,16 @@ public class StreamController {
             .doOnSubscribe(subscription -> 
                 log.debug("Client subscribed to show {} seat updates", showId))
             .doOnComplete(() -> 
-                log.info("Seat update stream completed for show {}", showId))
-            .doOnError(e -> 
-                log.error("Error in seat update stream for show {}", showId, e));
+                log.debug("SSE stream completed for show {}", showId))
+            .onErrorResume(e -> {
+                // Client disconnections are normal SSE behavior — suppress the
+                // Spring 6.2.x NullPointerException in DisconnectedClientHelper
+                if (e.getMessage() != null && e.getMessage().contains("Disconnected")) {
+                    log.debug("SSE client disconnected from show {}", showId);
+                } else {
+                    log.error("Error in seat update stream for show {}", showId, e);
+                }
+                return reactor.core.publisher.Flux.empty();
+            });
     }
 }

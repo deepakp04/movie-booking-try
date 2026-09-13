@@ -48,6 +48,10 @@ public class SecurityConfig {
                 .requestMatchers("/api/admin/**").hasRole(Role.ADMIN.name())
                 .requestMatchers("/api/owner/**").hasAnyRole(Role.ADMIN.name(), Role.THEATRE_OWNER.name())
 
+                // Operations & Compliance module (admin-scoped and owner-scoped)
+                .requestMatchers("/api/admin/operations/**").hasRole(Role.ADMIN.name())
+                .requestMatchers("/api/owner/operations/**").hasAnyRole(Role.ADMIN.name(), Role.THEATRE_OWNER.name())
+
                 .anyRequest().authenticated()
             )
             .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class);

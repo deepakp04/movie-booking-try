@@ -29,6 +29,7 @@
             <button class="nav-tab" onclick="switchTab('showsTab')">📅 Schedule Shows</button>
             <button class="nav-tab" onclick="switchTab('maintenanceTab')">🛠️ Maintenance</button>
             <button class="nav-tab" onclick="switchTab('analyticsTab')">📊 Analytics</button>
+            <button class="nav-tab" onclick="switchTab('operationsTab')">📋 Operations</button>
         </aside>
 
         <!-- Main Content Area -->
@@ -509,11 +510,140 @@
 
             </section>
 
+            <!-- ============ OPERATIONS & COMPLIANCE ============ -->
+            <section id="operationsTab" class="tab-content hidden">
+                <div class="section-title">
+                    <h2>Operations & Compliance</h2>
+                    <p class="subtitle">Show reports, ticket holder lookup, incident management, and generated reports for your theatre.</p>
+                </div>
+
+                <!-- Sub-navigation -->
+                <div class="analytics-filters" style="margin-bottom: 20px;">
+                    <button class="btn btn-secondary btn-sm" onclick="opsShowSection('opsShowReport')">🎬 Show Report</button>
+                    <button class="btn btn-secondary btn-sm" onclick="opsShowSection('opsTheatreReport')">🏛️ Theatre Report</button>
+                    <button class="btn btn-secondary btn-sm" onclick="opsShowSection('opsTicketHolders')">🎟️ Ticket Holders</button>
+                    <button class="btn btn-secondary btn-sm" onclick="opsShowSection('opsIncidents')">⚠️ Incidents</button>
+                    <button class="btn btn-secondary btn-sm" onclick="opsShowSection('opsReports')">📄 Generated Reports</button>
+                </div>
+
+                <!-- SHOW REPORT SECTION -->
+                <div id="opsShowReport" class="ops-section">
+                    <div class="admin-card">
+                        <h3>Show Report</h3>
+                        <p class="subtitle">Select a show to view booking details and ticket holders.</p>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="opsShowSelect">Show</label>
+                                <select id="opsShowSelect" onchange="opsLoadShowReport()">
+                                    <option value="" disabled selected>Select Show</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div id="opsShowReportResult" class="hidden"></div>
+                    </div>
+                </div>
+
+                <!-- THEATRE REPORT SECTION -->
+                <div id="opsTheatreReport" class="ops-section hidden">
+                    <div class="admin-card">
+                        <h3>Theatre Report</h3>
+                        <p class="subtitle">Generate a theatre-level operational summary.</p>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="opsDateFrom">Date From</label>
+                                <input type="date" id="opsDateFrom">
+                            </div>
+                            <div class="form-group">
+                                <label for="opsDateTo">Date To</label>
+                                <input type="date" id="opsDateTo">
+                            </div>
+                        </div>
+                        <button class="btn btn-primary btn-sm" onclick="opsLoadTheatreReport()">Generate Report</button>
+                        <div id="opsTheatreReportResult" class="hidden" style="margin-top: 16px;"></div>
+                    </div>
+                </div>
+
+                <!-- TICKET HOLDERS SECTION -->
+                <div id="opsTicketHolders" class="ops-section hidden">
+                    <div class="admin-card">
+                        <h3>Ticket Holder Lookup</h3>
+                        <div style="background: rgba(229,57,53,0.1); border: 1px solid rgba(229,57,53,0.3); border-radius: 6px; padding: 10px 16px; margin-bottom: 16px;">
+                            <p style="margin: 0; color: #ff8a80; font-size: 13px;">⚠️ This report contains customer personal information. Access and exports are audit-logged.</p>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="opsTHShowSelect">Show</label>
+                                <select id="opsTHShowSelect" onchange="opsLoadTicketHolders()">
+                                    <option value="" disabled selected>Select Show</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div id="opsTicketHoldersResult" class="hidden"></div>
+                    </div>
+                </div>
+
+                <!-- INCIDENTS SECTION -->
+                <div id="opsIncidents" class="ops-section hidden">
+                    <div class="admin-card">
+                        <h3>Incident Management</h3>
+                        <button class="btn btn-primary btn-sm" onclick="opsShowCreateIncidentForm()" style="margin-bottom: 16px;">+ Create Incident</button>
+                        <div id="opsIncidentForm" class="hidden" style="margin-bottom: 20px;">
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label for="incType">Type</label>
+                                    <select id="incType">
+                                        <option value="FIRE">Fire</option>
+                                        <option value="MEDICAL_EMERGENCY">Medical Emergency</option>
+                                        <option value="SECURITY_INCIDENT">Security Incident</option>
+                                        <option value="EVACUATION">Evacuation</option>
+                                        <option value="TECHNICAL_FAILURE">Technical Failure</option>
+                                        <option value="POWER_FAILURE">Power Failure</option>
+                                        <option value="OTHER">Other</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label for="incSeverity">Severity</label>
+                                    <select id="incSeverity">
+                                        <option value="LOW">Low</option>
+                                        <option value="MEDIUM">Medium</option>
+                                        <option value="HIGH">High</option>
+                                        <option value="CRITICAL">Critical</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label for="incDescription">Description</label>
+                                <textarea id="incDescription" rows="3" placeholder="Describe the incident..."></textarea>
+                            </div>
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label for="incStartTime">Incident Start Time</label>
+                                    <input type="datetime-local" id="incStartTime" required>
+                                </div>
+                            </div>
+                            <button class="btn btn-primary" onclick="opsCreateIncident()">Create Incident</button>
+                            <button class="btn btn-secondary" onclick="opsHideCreateIncidentForm()" style="margin-left: 8px;">Cancel</button>
+                        </div>
+                        <div id="opsIncidentsList"></div>
+                    </div>
+                </div>
+
+                <!-- GENERATED REPORTS SECTION -->
+                <div id="opsReports" class="ops-section hidden">
+                    <div class="admin-card">
+                        <h3>Generated Reports</h3>
+                        <p class="subtitle">Previously generated immutable report snapshots.</p>
+                        <div id="opsReportsList"></div>
+                    </div>
+                </div>
+
+            </section>
+
         </main>
     </div>
 
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script src="/js/analytics.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>        <script src="/js/analytics.js"></script>
+    <script src="/js/operations.js"></script>
     <script src="/owner.js"></script>
 </body>
 </html>

@@ -100,6 +100,13 @@ xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/x
     <version>0.12.6</version>
     <scope>runtime</scope>
 </dependency>
+
+<!-- Apache POI for Excel export (Operations & Compliance reports) -->
+<dependency>
+    <groupId>org.apache.poi</groupId>
+    <artifactId>poi-ooxml</artifactId>
+    <version>5.2.5</version>
+</dependency>
 </dependencies>
 
 <build>

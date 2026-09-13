@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+
+    <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>%d{yyyy-MM-dd'T'HH:mm:ss.SSSXXX} %highlight(%-5level) %5(%logger{5}) : %msg%n</pattern>
+        </encoder>
+    </appender>
+
+    <!-- Suppress the harmless Spring 6.2.x NullPointerException that fires when
+         SSE clients disconnect. The NPE is in Spring's DisconnectedClientHelper
+         (a known bug fixed in later Spring versions) and does not affect functionality. -->
+    <logger name="org.apache.catalina.core.AsyncContextImpl" level="ERROR" />
+
+    <root level="INFO">
+        <appender-ref ref="CONSOLE" />
+    </root>
+
+</configuration>
