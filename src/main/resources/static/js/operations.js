@@ -789,3 +789,159 @@ function getStatusColor(status) {
     const map = { 'OPEN': 'danger', 'UNDER_INVESTIGATION': 'warning', 'RESOLVED': 'success', 'CLOSED': 'info' };
     return map[status] || 'info';
 }
+
+// ================= CUSTOMER 360 =================
+
+async function opsSearchCustomers() {
+    const query = document.getElementById('opsCustSearchInput')?.value?.trim();
+    if (!query) return;
+
+    const container = document.getElementById('opsCustSearchResults');
+    container.innerHTML = '<p style="color: var(--text-muted);">Searching...</p>';
+
+    try {
+        const result = await opsApiCall(`/customers/search?q=${encodeURIComponent(query)}`);
+        if (!result) return;
+
+        const customers = result.data || [];
+        if (customers.length === 0) {
+            container.innerHTML = '<p style="color: var(--text-muted);">No customers found matching "' + query + '".</p>';
+            return;
+        }
+
+        container.innerHTML = customers.map(c => `
+            <div class="admin-card" style="cursor: pointer; margin-bottom: 12px; border-left: 3px solid var(--primary-color);" onclick="opsLoadCustomerProfile(${c.id})">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <div>
+                        <h4 style="color: var(--text-primary); margin: 0 0 4px 0;">${c.name || 'Unknown'}</h4>
+                        <p style="color: var(--text-muted); font-size: 13px; margin: 0;">
+                            ${c.email || ''} ${c.phone ? '| ' + c.phone : ''}
+                        </p>
+                    </div>
+                    <div style="text-align: right;">
+                        <p style="color: var(--text-primary); margin: 0; font-size: 18px; font-weight: 600;">₹${Number(c.totalSpent || 0).toLocaleString()}</p>
+                        <p style="color: var(--text-muted); font-size: 12px; margin: 0;">${c.totalBookings || 0} bookings</p>
+                    </div>
+                </div>
+            </div>
+        `).join('');
+    } catch (e) {
+        container.innerHTML = `<p style="color: #ff5252;">Error: ${e.message}</p>`;
+    }
+}
+
+async function opsLoadCustomerProfile(customerId) {
+    document.getElementById('opsCustomerSearch').classList.add('hidden');
+    const profileDiv = document.getElementById('opsCustomerProfile');
+    profileDiv.classList.remove('hidden');
+    const content = document.getElementById('opsCustProfileContent');
+    content.innerHTML = '<p style="color: var(--text-muted);">Loading profile...</p>';
+
+    try {
+        const result = await opsApiCall(`/customers/${customerId}`);
+        if (!result) return;
+
+        const r = result.data;
+        content.innerHTML = `
+            <!-- Customer Summary -->
+            <div class="admin-card" style="margin-bottom: 16px;">
+                <h3 style="margin-bottom: 16px;">${r.name}</h3>
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px;">
+                    <div><span style="color: var(--text-muted);">Customer ID:</span> <strong>CUST-${r.id}</strong></div>
+                    <div><span style="color: var(--text-muted);">Email:</span> ${r.email || '—'}</div>
+                    <div><span style="color: var(--text-muted);">Phone:</span> ${r.phone || '—'}</div>
+                    <div><span style="color: var(--text-muted);">Date of Birth:</span> ${r.dateOfBirth || '—'}</div>
+                    <div><span style="color: var(--text-muted);">Account Created:</span> ${r.createdAt ? new Date(r.createdAt).toLocaleDateString() : '—'}</div>
+                </div>
+            </div>
+
+            <!-- Stats -->
+            <div class="kpi-grid" style="grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); margin-bottom: 16px;">
+                <div class="kpi-card"><div class="kpi-value">${r.totalBookings}</div><div class="kpi-label">Total Bookings</div></div>
+                <div class="kpi-card"><div class="kpi-value">${r.confirmedBookings}</div><div class="kpi-label">Confirmed</div></div>
+                <div class="kpi-card"><div class="kpi-value">${r.cancelledBookings}</div><div class="kpi-label">Cancelled</div></div>
+                <div class="kpi-card"><div class="kpi-value">${r.expiredBookings}</div><div class="kpi-label">Expired</div></div>
+                <div class="kpi-card"><div class="kpi-value">₹${Number(r.totalSpent || 0).toLocaleString()}</div><div class="kpi-label">Total Spent</div></div>
+                <div class="kpi-card"><div class="kpi-value">₹${Number(r.avgBookingValue || 0).toLocaleString()}</div><div class="kpi-label">Avg Booking</div></div>
+            </div>
+
+            <!-- Patterns -->
+            <div class="admin-card" style="margin-bottom: 16px;">
+                <h4 style="margin-bottom: 8px;">📊 Behavioural Patterns</h4>
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 8px; font-size: 13px;">
+                    <div><span style="color: var(--text-muted);">Favourite Theatre:</span> <strong>${r.favouriteTheatre || '—'}</strong></div>
+                    <div><span style="color: var(--text-muted);">Preferred Format:</span> <strong>${r.preferredFormat || '—'}</strong></div>
+                    <div><span style="color: var(--text-muted);">Preferred Time:</span> <strong>${r.preferredTimeSlot || '—'}</strong></div>
+                    <div><span style="color: var(--text-muted);">Weekend Bookings:</span> <strong>${r.weekendBookings}</strong></div>
+                    <div><span style="color: var(--text-muted);">Weekday Bookings:</span> <strong>${r.weekdayBookings}</strong></div>
+                </div>
+            </div>
+
+            <!-- Booking History -->
+            <div class="admin-card">
+                <h4 style="margin-bottom: 12px;">🎟️ Booking History (${r.bookings?.length || 0})</h4>
+                ${r.bookings && r.bookings.length > 0 ? `
+                    <div class="table-wrapper">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Booking</th>
+                                    <th>Movie</th>
+                                    <th>Theatre</th>
+                                    <th>Show</th>
+                                    <th>Seats</th>
+                                    <th>Amount</th>
+                                    <th>Status</th>
+                                    <th>Details</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${r.bookings.map(b => `
+                                    <tr>
+                                        <td>#${b.bookingId}</td>
+                                        <td>${b.movieTitle || '—'}</td>
+                                        <td>${b.theatreName || '—'}</td>
+                                        <td>${b.showStartTime ? new Date(b.showStartTime).toLocaleString() : '—'}</td>
+                                        <td>${b.seatCodes || '—'}</td>
+                                        <td>₹${Number(b.totalAmount || 0).toLocaleString()}</td>
+                                        <td><span class="badge badge-${b.bookingStatus === 'CONFIRMED' ? 'success' : b.bookingStatus === 'CANCELLED' ? 'danger' : 'warning'}">${b.bookingStatus}</span></td>
+                                        <td>
+                                            ${b.attendees && b.attendees.length > 0 ? 
+                                                `<button class="btn btn-secondary btn-sm" onclick="opsToggleAttendees(this)" style="font-size: 11px;">👁 View</button>
+                                                <div class="ops-attendee-list hidden" style="margin-top: 8px; font-size: 12px;">
+                                                    ${b.attendees.map(a => 
+                                                        `<div style="padding: 4px 0; border-bottom: 1px solid var(--border-color);">
+                                                            <strong>${a.seatCode}</strong> — ${a.attendeeName || 'Not specified'}
+                                                            ${a.phone ? ' | ' + a.phone : ''}
+                                                            ${a.dateOfBirth ? ' | DOB: ' + a.dateOfBirth : ''}
+                                                            ${a.isSelf ? ' <span class="badge badge-info" style="font-size:10px;">Self</span>' : ''}
+                                                        </div>`
+                                                    ).join('')}
+                                                </div>`
+                                            : '<span style="color: var(--text-muted); font-size: 11px;">No attendees</span>'
+                                        }
+                                    </td>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                ` : '<p style="color: var(--text-muted);">No bookings found.</p>'}
+            </div>
+        `;
+    } catch (e) {
+        content.innerHTML = `<p style="color: #ff5252;">Error: ${e.message}</p>`;
+    }
+}
+
+function opsBackToCustomerSearch() {
+    document.getElementById('opsCustomerSearch').classList.remove('hidden');
+    document.getElementById('opsCustomerProfile').classList.add('hidden');
+}
+
+function opsToggleAttendees(btn) {
+    const list = btn.nextElementSibling;
+    if (list) {
+        list.classList.toggle('hidden');
+        btn.textContent = list.classList.contains('hidden') ? '👁 View' : '🙈 Hide';
+    }
+}

@@ -11,6 +11,7 @@ import com.moviebooking.ops.service.AuditService;
 import com.moviebooking.ops.service.IncidentService;
 import com.moviebooking.ops.model.ReportSnapshot;
 import com.moviebooking.ops.repository.ReportSnapshotRepository;
+import com.moviebooking.ops.service.Customer360Service;
 import com.moviebooking.ops.service.ExcelExportService;
 import com.moviebooking.ops.service.OperationsService;
 import com.moviebooking.ops.service.ReportService;
@@ -33,6 +34,7 @@ public class AdminOperationsController {
     private final UserRepository userRepository;
     private final ExcelExportService excelExportService;
     private final ReportSnapshotRepository reportRepository;
+    private final Customer360Service customer360Service;
 
     public AdminOperationsController(OperationsService operationsService,
                                      IncidentService incidentService,
@@ -40,7 +42,8 @@ public class AdminOperationsController {
                                      AuditService auditService,
                                      UserRepository userRepository,
                                      ExcelExportService excelExportService,
-                                     ReportSnapshotRepository reportRepository) {
+                                     ReportSnapshotRepository reportRepository,
+                                     Customer360Service customer360Service) {
         this.operationsService = operationsService;
         this.incidentService = incidentService;
         this.reportService = reportService;
@@ -48,6 +51,7 @@ public class AdminOperationsController {
         this.userRepository = userRepository;
         this.excelExportService = excelExportService;
         this.reportRepository = reportRepository;
+        this.customer360Service = customer360Service;
     }
 
     // ================= DROPDOWNS =================
@@ -288,6 +292,34 @@ public class AdminOperationsController {
                 "Generated incident report for incident #" + id, request);
 
         return ApiResponse.success("Incident report generated successfully", snapshot);
+    }
+
+    // ================= CUSTOMER 360 =================
+
+    @GetMapping("/customers/search")
+    public ApiResponse<List<CustomerSearchResult>> searchCustomers(
+            @RequestParam String q,
+            HttpServletRequest request) {
+
+        List<CustomerSearchResult> results = customer360Service.searchCustomers(q);
+
+        auditLog(AuditAction.VIEW_TICKET_HOLDERS, "CUSTOMER", null, null, null,
+                "Searched customers: \"" + q + \"" + " (" + results.size() + " results)", request);
+
+        return ApiResponse.success("Customer search completed", results);
+    }
+
+    @GetMapping("/customers/{customerId}")
+    public ApiResponse<CustomerProfileResponse> getCustomerProfile(
+            @PathVariable Long customerId,
+            HttpServletRequest request) {
+
+        CustomerProfileResponse profile = customer360Service.getCustomerProfile(customerId);
+
+        auditLog(AuditAction.VIEW_TICKET_HOLDERS, "CUSTOMER", customerId, null, null,
+                "Viewed customer profile #" + customerId + " (" + profile.name() + ")", request);
+
+        return ApiResponse.success("Customer profile retrieved", profile);
     }
 
     // ================= HELPER =================

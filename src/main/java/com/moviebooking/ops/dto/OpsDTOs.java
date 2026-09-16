@@ -5,6 +5,7 @@ import com.moviebooking.ops.model.IncidentStatus;
 import com.moviebooking.ops.model.IncidentType;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -217,6 +218,66 @@ public class OpsDTOs {
         List<TheatreDropdownItem> theatres,
         List<MovieFilterItem> movies,
         List<ScreenFilterItem> screens
+    ) {}
+
+    // ================= CUSTOMER 360 =================
+
+    public record CustomerSearchResult(
+        Long id,
+        String name,
+        String email,
+        String phone,
+        Long totalBookings,
+        Long confirmedBookings,
+        BigDecimal totalSpent,
+        LocalDateTime memberSince,
+        LocalDateTime lastBookingAt
+    ) {}
+
+    public record CustomerProfileResponse(
+        Long id,
+        String name,
+        String email,
+        String phone,
+        LocalDate dateOfBirth,
+        LocalDateTime createdAt,
+        Long totalBookings,
+        Long confirmedBookings,
+        Long cancelledBookings,
+        Long expiredBookings,
+        BigDecimal totalSpent,
+        BigDecimal avgBookingValue,
+        String favouriteTheatre,
+        String preferredFormat,
+        String preferredTimeSlot,
+        Long weekendBookings,
+        Long weekdayBookings,
+        List<CustomerBookingRow> bookings
+    ) {}
+
+    public record CustomerBookingRow(
+        Long bookingId,
+        String transactionId,
+        String movieTitle,
+        String theatreName,
+        String screenName,
+        LocalDateTime showStartTime,
+        String seatCodes,
+        Integer numberOfSeats,
+        BigDecimal totalAmount,
+        String bookingStatus,
+        String paymentStatus,
+        String razorpayPaymentId,
+        LocalDateTime bookingTime,
+        List<CustomerBookingAttendee> attendees
+    ) {}
+
+    public record CustomerBookingAttendee(
+        String seatCode,
+        String attendeeName,
+        String phone,
+        String dateOfBirth,
+        Boolean isSelf
     ) {}
 
     // ================= BOOKING SUMMARY (for report snapshots) =================

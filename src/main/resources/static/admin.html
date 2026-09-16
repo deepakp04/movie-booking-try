@@ -742,6 +742,7 @@
                     <button class="btn btn-secondary btn-sm" onclick="opsShowSection('opsTicketHolders')">🎟️ Ticket Holders</button>
                     <button class="btn btn-secondary btn-sm" onclick="opsShowSection('opsIncidents')">⚠️ Incidents</button>
                     <button class="btn btn-secondary btn-sm" onclick="opsShowSection('opsReports')">📄 Generated Reports</button>
+                    <button class="btn btn-secondary btn-sm" onclick="opsShowSection('opsCustomer360')">👤 Customer 360</button>
                 </div>
 
                 <!-- SHOW REPORT SECTION -->
@@ -910,6 +911,32 @@
                         <h3>Generated Reports</h3>
                         <p class="subtitle">Previously generated immutable report snapshots.</p>
                         <div id="opsReportsList"></div>
+                    </div>
+                </div>
+
+                <!-- CUSTOMER 360 SECTION -->
+                <div id="opsCustomer360" class="ops-section hidden">
+                    <!-- Search View -->
+                    <div id="opsCustomerSearch">
+                        <div class="admin-card">
+                            <h3>Customer Search</h3>
+                            <p class="subtitle">Search by name, email, phone, Booking ID, or Customer ID.</p>
+                            <div style="display: flex; gap: 8px; margin-bottom: 16px;">
+                                <input type="text" id="opsCustSearchInput" placeholder="Enter customer name, email, phone, or booking ID..." 
+                                       style="flex: 1; padding: 10px 14px; border-radius: 6px; border: 1px solid var(--border-color); background: var(--bg-primary); color: var(--text-primary); font-size: 14px;"
+                                       onkeydown="if(event.key==='Enter') opsSearchCustomers()">
+                                <button class="btn btn-primary" onclick="opsSearchCustomers()">🔍 Search</button>
+                            </div>
+                            <div id="opsCustSearchResults"></div>
+                        </div>
+                    </div>
+
+                    <!-- Profile View (hidden until customer selected) -->
+                    <div id="opsCustomerProfile" class="hidden">
+                        <div style="margin-bottom: 12px;">
+                            <button class="btn btn-secondary btn-sm" onclick="opsBackToCustomerSearch()">← Back to Search</button>
+                        </div>
+                        <div id="opsCustProfileContent"></div>
                     </div>
                 </div>
 
