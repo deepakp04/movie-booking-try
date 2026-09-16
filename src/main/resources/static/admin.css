@@ -471,6 +471,58 @@ body {
   margin-bottom: 24px;
 }
 
+/* Card Grid (top-level navigation) */
+.ops-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.ops-card {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  padding: 24px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-align: center;
+}
+
+.ops-card:hover {
+  border-color: var(--primary-color);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 16px rgba(0,0,0,0.15);
+}
+
+.ops-card-icon {
+  font-size: 2rem;
+  margin-bottom: 8px;
+}
+
+.ops-card-title {
+  font-size: 1.1rem;
+  color: var(--text-primary);
+  margin: 0 0 6px 0;
+}
+
+.ops-card-desc {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  margin: 0;
+  line-height: 1.4;
+}
+
+/* Card View (inside a card) */
+.ops-card-view {
+  animation: fadeIn 0.2s ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
 .badge {
   display: inline-block;
   padding: 2px 8px;

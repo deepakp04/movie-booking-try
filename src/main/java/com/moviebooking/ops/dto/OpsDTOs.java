@@ -309,4 +309,44 @@ public class OpsDTOs {
         String paymentStatus,
         String paymentTransactionId
     ) {}
+
+    // ================= SCREEN UTILISATION =================
+
+    public record UtilisationOverviewResponse(
+        Long theatreId,
+        String theatreName,
+        Integer totalScreens,
+        String dateFrom,
+        String dateTo,
+        List<ScreenUtilisationRow> screens
+    ) {}
+
+    public record ScreenUtilisationRow(
+        Long screenId,
+        String screenName,
+        Integer totalSeats,
+        Long showCount,
+        Double activeHours,
+        Double operationalHours,
+        Double utilisationPercent,
+        String status  // GREEN, YELLOW, RED
+    ) {}
+
+    public record ConflictCheckResponse(
+        Boolean hasConflict,
+        Long screenId,
+        String screenName,
+        String proposedStart,
+        String proposedEnd,
+        List<ConflictDetail> conflicts,
+        String message
+    ) {}
+
+    public record ConflictDetail(
+        Long showId,
+        String movieTitle,
+        String showStartTime,
+        String showEndTime,
+        String message
+    ) {}
 }

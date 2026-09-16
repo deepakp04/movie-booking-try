@@ -15,6 +15,7 @@ import com.moviebooking.ops.service.Customer360Service;
 import com.moviebooking.ops.service.ExcelExportService;
 import com.moviebooking.ops.service.OperationsService;
 import com.moviebooking.ops.service.ReportService;
+import com.moviebooking.ops.service.ScreenUtilisationService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.apache.poi.ss.usermodel.Workbook;
@@ -35,6 +36,7 @@ public class AdminOperationsController {
     private final ExcelExportService excelExportService;
     private final ReportSnapshotRepository reportRepository;
     private final Customer360Service customer360Service;
+    private final ScreenUtilisationService screenUtilisationService;
 
     public AdminOperationsController(OperationsService operationsService,
                                      IncidentService incidentService,
@@ -43,7 +45,8 @@ public class AdminOperationsController {
                                      UserRepository userRepository,
                                      ExcelExportService excelExportService,
                                      ReportSnapshotRepository reportRepository,
-                                     Customer360Service customer360Service) {
+                                     Customer360Service customer360Service,
+                                     ScreenUtilisationService screenUtilisationService) {
         this.operationsService = operationsService;
         this.incidentService = incidentService;
         this.reportService = reportService;
@@ -52,6 +55,7 @@ public class AdminOperationsController {
         this.excelExportService = excelExportService;
         this.reportRepository = reportRepository;
         this.customer360Service = customer360Service;
+        this.screenUtilisationService = screenUtilisationService;
     }
 
     // ================= DROPDOWNS =================
@@ -321,6 +325,31 @@ public class AdminOperationsController {
                 "Viewed customer profile #" + customerId + " (" + profile.name() + ")", request);
 
         return ApiResponse.success("Customer profile retrieved", profile);
+    }
+
+    // ================= SCREEN UTILISATION =================
+
+    @GetMapping("/utilisation")
+    public ApiResponse<UtilisationOverviewResponse> getUtilisation(
+            @RequestParam Long theatreId,
+            @RequestParam(required = false) String dateFrom,
+            @RequestParam(required = false) String dateTo,
+            HttpServletRequest request) {
+
+        UtilisationOverviewResponse response = screenUtilisationService.getUtilisationOverview(theatreId, dateFrom, dateTo);
+        return ApiResponse.success("Utilisation overview loaded", response);
+    }
+
+    @GetMapping("/conflicts")
+    public ApiResponse<ConflictCheckResponse> checkConflicts(
+            @RequestParam Long screenId,
+            @RequestParam String startTime,
+            @RequestParam Integer durationMinutes,
+            HttpServletRequest request) {
+
+        java.time.LocalDateTime start = java.time.LocalDateTime.parse(startTime);
+        ConflictCheckResponse response = screenUtilisationService.checkConflicts(screenId, start, durationMinutes);
+        return ApiResponse.success("Conflict check completed", response);
     }
 
     // ================= HELPER =================

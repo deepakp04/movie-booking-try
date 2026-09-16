@@ -16,6 +16,7 @@ import com.moviebooking.ops.repository.ReportSnapshotRepository;
 import com.moviebooking.ops.service.ExcelExportService;
 import com.moviebooking.ops.service.OperationsService;
 import com.moviebooking.ops.service.ReportService;
+import com.moviebooking.ops.service.ScreenUtilisationService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.apache.poi.ss.usermodel.Workbook;
@@ -36,6 +37,7 @@ public class OwnerOperationsController {
     private final TheatreRepository theatreRepository;
     private final ExcelExportService excelExportService;
     private final ReportSnapshotRepository reportRepository;
+    private final ScreenUtilisationService screenUtilisationService;
 
     public OwnerOperationsController(OperationsService operationsService,
                                      IncidentService incidentService,
@@ -44,7 +46,8 @@ public class OwnerOperationsController {
                                      UserRepository userRepository,
                                      TheatreRepository theatreRepository,
                                      ExcelExportService excelExportService,
-                                     ReportSnapshotRepository reportRepository) {
+                                     ReportSnapshotRepository reportRepository,
+                                     ScreenUtilisationService screenUtilisationService) {
         this.operationsService = operationsService;
         this.incidentService = incidentService;
         this.reportService = reportService;
@@ -53,6 +56,7 @@ public class OwnerOperationsController {
         this.theatreRepository = theatreRepository;
         this.excelExportService = excelExportService;
         this.reportRepository = reportRepository;
+        this.screenUtilisationService = screenUtilisationService;
     }
 
     /**
@@ -290,6 +294,34 @@ public class OwnerOperationsController {
                 "Generated incident report for incident #" + id, request);
 
         return ApiResponse.success("Incident report generated successfully", snapshot);
+    }
+
+    // ================= SCREEN UTILISATION =================
+
+    @GetMapping("/utilisation")
+    public ApiResponse<UtilisationOverviewResponse> getUtilisation(
+            @RequestParam(required = false) String dateFrom,
+            @RequestParam(required = false) String dateTo,
+            HttpServletRequest request) {
+
+        Theatre theatre = currentOwnersTheatre();
+        UtilisationOverviewResponse response = screenUtilisationService.getUtilisationOverview(
+                theatre.getId(), dateFrom, dateTo);
+        return ApiResponse.success("Utilisation overview loaded", response);
+    }
+
+    @GetMapping("/conflicts")
+    public ApiResponse<ConflictCheckResponse> checkConflicts(
+            @RequestParam Long screenId,
+            @RequestParam String startTime,
+            @RequestParam Integer durationMinutes,
+            HttpServletRequest request) {
+
+        Theatre theatre = currentOwnersTheatre();
+
+        java.time.LocalDateTime start = java.time.LocalDateTime.parse(startTime);
+        ConflictCheckResponse response = screenUtilisationService.checkConflicts(screenId, start, durationMinutes);
+        return ApiResponse.success("Conflict check completed", response);
     }
 
     // ================= HELPER =================

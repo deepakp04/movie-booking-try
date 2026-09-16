@@ -732,18 +732,44 @@
             <section id="operationsTab" class="tab-content hidden">
                 <div class="section-title">
                     <h2>Operations & Compliance</h2>
-                    <p class="subtitle">Show reports, theatre reports, ticket holder lookup, incident management, and generated reports.</p>
+                    <p class="subtitle">Reports, incident management, customer lookup, and screen utilisation.</p>
                 </div>
 
-                <!-- Sub-navigation -->
-                <div class="analytics-filters" style="margin-bottom: 20px;">
-                    <button class="btn btn-secondary btn-sm" onclick="opsShowSection('opsShowReport')">🎬 Show Report</button>
-                    <button class="btn btn-secondary btn-sm" onclick="opsShowSection('opsTheatreReport')">🏛️ Theatre Report</button>
-                    <button class="btn btn-secondary btn-sm" onclick="opsShowSection('opsTicketHolders')">🎟️ Ticket Holders</button>
-                    <button class="btn btn-secondary btn-sm" onclick="opsShowSection('opsIncidents')">⚠️ Incidents</button>
-                    <button class="btn btn-secondary btn-sm" onclick="opsShowSection('opsReports')">📄 Generated Reports</button>
-                    <button class="btn btn-secondary btn-sm" onclick="opsShowSection('opsCustomer360')">👤 Customer 360</button>
+                <!-- ============ CARD GRID (top-level navigation) ============ -->
+                <div id="opsCardGrid" class="ops-card-grid">
+                    <div class="ops-card" onclick="opsOpenCard('opsReportsCard')">
+                        <div class="ops-card-icon">📊</div>
+                        <h3 class="ops-card-title">Reports & Analytics</h3>
+                        <p class="ops-card-desc">Show reports, theatre performance, ticket holders, and saved report snapshots.</p>
+                    </div>
+                    <div class="ops-card" onclick="opsOpenCard('opsIncidentsCard')">
+                        <div class="ops-card-icon">⚠️</div>
+                        <h3 class="ops-card-title">Incident Management</h3>
+                        <p class="ops-card-desc">Create, track, and resolve venue incidents and safety events.</p>
+                    </div>
+                    <div class="ops-card" onclick="opsOpenCard('opsCustomer360Card')">
+                        <div class="ops-card-icon">👤</div>
+                        <h3 class="ops-card-title">Customer 360</h3>
+                        <p class="ops-card-desc">Search customers by name, email, phone, or booking ID. View profiles and history.</p>
+                    </div>
+                    <div class="ops-card" onclick="opsOpenCard('opsScreenUtilCard')">
+                        <div class="ops-card-icon">🖥️</div>
+                        <h3 class="ops-card-title">Screen Utilisation</h3>
+                        <p class="ops-card-desc">Screen usage metrics, scheduling conflicts, and optimisation overview.</p>
+                    </div>
                 </div>
+
+                <!-- ============ CARD: REPORTS & ANALYTICS ============ -->
+                <div id="opsReportsCard" class="ops-card-view hidden">
+                    <div style="margin-bottom: 12px;">
+                        <button class="btn btn-secondary btn-sm" onclick="opsBackToCards()">← Back</button>
+                    </div>
+                    <div class="analytics-filters" style="margin-bottom: 16px;">
+                        <button class="btn btn-secondary btn-sm" onclick="opsShowSection('opsShowReport')">🎬 Show Report</button>
+                        <button class="btn btn-secondary btn-sm" onclick="opsShowSection('opsTheatreReport')">🏛️ Theatre Report</button>
+                        <button class="btn btn-secondary btn-sm" onclick="opsShowSection('opsTicketHolders')">🎟️ Ticket Holders</button>
+                        <button class="btn btn-secondary btn-sm" onclick="opsShowSection('opsReports')">📄 Generated Reports</button>
+                    </div>
 
                 <!-- SHOW REPORT SECTION -->
                 <div id="opsShowReport" class="ops-section">
@@ -853,8 +879,22 @@
                     </div>
                 </div>
 
-                <!-- INCIDENTS SECTION -->
-                <div id="opsIncidents" class="ops-section hidden">
+                <!-- GENERATED REPORTS SECTION -->
+                <div id="opsReports" class="ops-section hidden">
+                    <div class="admin-card">
+                        <h3>Generated Reports</h3>
+                        <p class="subtitle">Previously generated immutable report snapshots.</p>
+                        <div id="opsReportsList"></div>
+                    </div>
+                </div>
+
+                </div> <!-- close opsReportsCard -->
+
+                <!-- ============ CARD: INCIDENTS ============ -->
+                <div id="opsIncidentsCard" class="ops-card-view hidden">
+                    <div style="margin-bottom: 12px;">
+                        <button class="btn btn-secondary btn-sm" onclick="opsBackToCards()">← Back</button>
+                    </div>
                     <div class="admin-card">
                         <h3>Incident Management</h3>
                         <button class="btn btn-primary btn-sm" onclick="opsShowCreateIncidentForm()" style="margin-bottom: 16px;">+ Create Incident</button>
@@ -903,19 +943,13 @@
                         </div>
                         <div id="opsIncidentsList"></div>
                     </div>
-                </div>
+                </div> <!-- close opsIncidentsCard -->
 
-                <!-- GENERATED REPORTS SECTION -->
-                <div id="opsReports" class="ops-section hidden">
-                    <div class="admin-card">
-                        <h3>Generated Reports</h3>
-                        <p class="subtitle">Previously generated immutable report snapshots.</p>
-                        <div id="opsReportsList"></div>
+                <!-- ============ CARD: CUSTOMER 360 ============ -->
+                <div id="opsCustomer360Card" class="ops-card-view hidden">
+                    <div style="margin-bottom: 12px;">
+                        <button class="btn btn-secondary btn-sm" onclick="opsBackToCards()">← Back</button>
                     </div>
-                </div>
-
-                <!-- CUSTOMER 360 SECTION -->
-                <div id="opsCustomer360" class="ops-section hidden">
                     <!-- Search View -->
                     <div id="opsCustomerSearch">
                         <div class="admin-card">
@@ -930,7 +964,6 @@
                             <div id="opsCustSearchResults"></div>
                         </div>
                     </div>
-
                     <!-- Profile View (hidden until customer selected) -->
                     <div id="opsCustomerProfile" class="hidden">
                         <div style="margin-bottom: 12px;">
@@ -938,7 +971,82 @@
                         </div>
                         <div id="opsCustProfileContent"></div>
                     </div>
-                </div>
+                </div> <!-- close opsCustomer360Card -->
+
+                <!-- ============ CARD: SCREEN UTILISATION ============ -->
+                <div id="opsScreenUtilCard" class="ops-card-view hidden">
+                    <div style="margin-bottom: 12px;">
+                        <button class="btn btn-secondary btn-sm" onclick="opsBackToCards()">← Back</button>
+                    </div>
+                    <div class="analytics-filters" style="margin-bottom: 16px;">
+                        <button class="btn btn-secondary btn-sm" onclick="opsShowSection('opsUtilOverview')">📊 Overview</button>
+                        <button class="btn btn-secondary btn-sm" onclick="opsShowSection('opsUtilConflict')">⚠️ Conflict Check</button>
+                    </div>
+
+                    <!-- UTILISATION OVERVIEW -->
+                    <div id="opsUtilOverview" class="ops-section">
+                        <div class="admin-card">
+                            <h3>Screen Utilisation Overview</h3>
+                            <p class="subtitle">Screen usage metrics for the selected theatre and period.</p>
+                            <div class="form-row" style="margin-bottom: 12px;">
+                                <div class="form-group">
+                                    <label for="opsUtilTheatre">Theatre</label>
+                                    <select id="opsUtilTheatre" onchange="opsLoadUtilisation()">
+                                        <option value="" disabled selected>Select Theatre</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label for="opsUtilDateFrom">Date From</label>
+                                    <input type="date" id="opsUtilDateFrom">
+                                </div>
+                                <div class="form-group">
+                                    <label for="opsUtilDateTo">Date To</label>
+                                    <input type="date" id="opsUtilDateTo">
+                                </div>
+                                <button class="btn btn-primary btn-sm" onclick="opsLoadUtilisation()" style="align-self: flex-end;">Load</button>
+                            </div>
+                            <div id="opsUtilOverviewResult"></div>
+                        </div>
+                    </div>
+
+                    <!-- CONFLICT CHECK -->
+                    <div id="opsUtilConflict" class="ops-section hidden">
+                        <div class="admin-card">
+                            <h3>Scheduling Conflict Check</h3>
+                            <p class="subtitle">Check if a proposed show time conflicts with existing shows on a screen.</p>
+                            <div class="form-row" style="margin-bottom: 12px;">
+                                <div class="form-group">
+                                    <label for="opsConflictScreen">Screen</label>
+                                    <select id="opsConflictScreen">
+                                        <option value="" disabled selected>Select Screen</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label for="opsConflictMovie">Movie</label>
+                                    <select id="opsConflictMovie">
+                                        <option value="" disabled selected>Select Movie</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="form-row" style="margin-bottom: 12px;">
+                                <div class="form-group">
+                                    <label for="opsConflictDate">Date</label>
+                                    <input type="date" id="opsConflictDate">
+                                </div>
+                                <div class="form-group">
+                                    <label for="opsConflictTime">Start Time</label>
+                                    <input type="time" id="opsConflictTime" value="15:00">
+                                </div>
+                                <div class="form-group">
+                                    <label>Duration (auto-filled)</label>
+                                    <input type="text" id="opsConflictDuration" readonly placeholder="Select movie first" style="background: var(--bg-secondary);">
+                                </div>
+                            </div>
+                            <button class="btn btn-primary btn-sm" onclick="opsCheckConflicts()">Check Conflicts</button>
+                            <div id="opsConflictResult" style="margin-top: 16px;"></div>
+                        </div>
+                    </div>
+                </div> <!-- close opsScreenUtilCard -->
 
             </section>
 

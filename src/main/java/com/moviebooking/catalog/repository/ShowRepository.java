@@ -72,4 +72,29 @@ public interface ShowRepository extends JpaRepository<Show, Long> {
     List<Show> findByIsDeletedFalseAndStartTimeLessThanOrderByStartTimeDesc(LocalDateTime before);
 
     List<Show> findByIsDeletedFalseOrderByStartTimeDesc();
+
+    // ---- Screen Utilisation: find overlapping shows for conflict detection ----
+    @Query("SELECT s FROM Show s"
+         + " WHERE s.screen.id = :screenId"
+         + " AND s.isDeleted = false"
+         + " AND s.startTime < :proposedEnd"
+         + " AND s.startTime > :proposedStart"
+         + " ORDER BY s.startTime")
+    List<Show> findOverlappingShows(
+            @Param("screenId") Long screenId,
+            @Param("proposedStart") LocalDateTime proposedStart,
+            @Param("proposedEnd") LocalDateTime proposedEnd
+    );
+
+    // ---- Screen Utilisation: all shows for a theatre in a date range ----
+    @Query("SELECT s FROM Show s"
+         + " WHERE s.screen.theatre.id = :theatreId"
+         + " AND s.isDeleted = false"
+         + " AND s.startTime BETWEEN :from AND :to"
+         + " ORDER BY s.screen.id, s.startTime")
+    List<Show> findShowsByTheatreAndDateRange(
+            @Param("theatreId") Long theatreId,
+            @Param("from") LocalDateTime from,
+            @Param("to") LocalDateTime to
+    );
 }

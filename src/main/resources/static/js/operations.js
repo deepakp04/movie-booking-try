@@ -24,6 +24,9 @@ function opsInit() {
     if (OPS_API_BASE === '/api/admin') {
         opsLoadTheatresDropdown();
         opsLoadFilterOptions();
+    } else {
+        // For owner, populate filter data from shows for conflict check dropdowns
+        opsLoadOwnerFilterData();
     }
 
     // Set default date range (last 30 days)
@@ -43,6 +46,12 @@ function opsInit() {
     const thFilterTo = document.getElementById('opsTHFilterDateTo');
     if (thFilterFrom && !thFilterFrom.value) thFilterFrom.value = thirtyDaysAgo.toISOString().split('T')[0];
     if (thFilterTo && !thFilterTo.value) thFilterTo.value = today.toISOString().split('T')[0];
+    // Set default dates for screen utilisation
+    const sevenDaysAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
+    const utilFrom = document.getElementById('opsUtilDateFrom');
+    const utilTo = document.getElementById('opsUtilDateTo');
+    if (utilFrom && !utilFrom.value) utilFrom.value = sevenDaysAgo.toISOString().split('T')[0];
+    if (utilTo && !utilTo.value) utilTo.value = today.toISOString().split('T')[0];
 }
 
 // ================= SECTION NAVIGATION =================
@@ -51,6 +60,27 @@ function opsShowSection(sectionId) {
     document.querySelectorAll('.ops-section').forEach(el => el.classList.add('hidden'));
     const section = document.getElementById(sectionId);
     if (section) section.classList.remove('hidden');
+}
+
+// ================= CARD NAVIGATION =================
+
+function opsOpenCard(cardId) {
+    // Hide the card grid
+    const grid = document.getElementById('opsCardGrid');
+    if (grid) grid.classList.add('hidden');
+    // Hide all card views
+    document.querySelectorAll('.ops-card-view').forEach(el => el.classList.add('hidden'));
+    // Show the requested card
+    const card = document.getElementById(cardId);
+    if (card) card.classList.remove('hidden');
+}
+
+function opsBackToCards() {
+    // Hide all card views
+    document.querySelectorAll('.ops-card-view').forEach(el => el.classList.add('hidden'));
+    // Show the card grid
+    const grid = document.getElementById('opsCardGrid');
+    if (grid) grid.classList.remove('hidden');
 }
 
 // ================= API HELPER =================
@@ -125,7 +155,7 @@ async function opsLoadTheatresDropdown() {
         if (!result) return;
 
         const theatres = result.data || [];
-        const selects = ['opsTheatreSelect', 'incTheatre'];
+        const selects = ['opsTheatreSelect', 'incTheatre', 'opsUtilTheatre'];
         selects.forEach(id => {
             const select = document.getElementById(id);
             if (!select) return;
@@ -190,6 +220,63 @@ function populateFilterDropdowns() {
             opt.textContent = s.name + ' — ' + s.theatreName;
             screenSelect.appendChild(opt);
         });
+    }
+    // Also populate conflict check dropdowns
+    populateConflictDropdowns();
+}
+
+function populateConflictDropdowns() {
+    // Populate conflict screen dropdown from filter data
+    const conflictScreen = document.getElementById('opsConflictScreen');
+    if (conflictScreen) {
+        while (conflictScreen.options.length > 1) conflictScreen.remove(1);
+        (opsFilterData.screens || []).forEach(s => {
+            const opt = document.createElement('option');
+            opt.value = s.id || s.name;
+            opt.textContent = s.name + ' — ' + s.theatreName;
+            conflictScreen.appendChild(opt);
+        });
+    }
+    // Populate conflict movie dropdown from filter data
+    const conflictMovie = document.getElementById('opsConflictMovie');
+    if (conflictMovie) {
+        while (conflictMovie.options.length > 1) conflictMovie.remove(1);
+        (opsFilterData.movies || []).forEach(m => {
+            const opt = document.createElement('option');
+            opt.value = m.id || m.title;
+            opt.textContent = m.title;
+            opt.setAttribute('data-duration', '150'); // default
+            conflictMovie.appendChild(opt);
+        });
+        conflictMovie.setAttribute('onchange', 'opsOnConflictMovieChange()');
+    }
+}
+
+async function opsLoadOwnerFilterData() {
+    try {
+        const result = await opsApiCall('/shows?scope=all');
+        if (!result) return;
+        const shows = result.data || [];
+        // Extract unique screens and movies from shows
+        const screenMap = {};
+        const movieMap = {};
+        shows.forEach(s => {
+            if (s.screenName && s.theatreName) {
+                const key = s.screenName + '@' + s.theatreName;
+                if (!screenMap[key]) screenMap[key] = { id: s.screenName, name: s.screenName, theatreName: s.theatreName };
+            }
+            if (s.movieTitle) {
+                if (!movieMap[s.movieTitle]) movieMap[s.movieTitle] = { id: s.movieTitle, title: s.movieTitle };
+            }
+        });
+        opsFilterData = {
+            theatres: [],
+            screens: Object.values(screenMap),
+            movies: Object.values(movieMap)
+        };
+        populateConflictDropdowns();
+    } catch (e) {
+        console.error('Failed to load owner filter data:', e);
     }
 }
 
@@ -944,4 +1031,133 @@ function opsToggleAttendees(btn) {
         list.classList.toggle('hidden');
         btn.textContent = list.classList.contains('hidden') ? '👁 View' : '🙈 Hide';
     }
+}
+
+// ================= SCREEN UTILISATION =================
+
+async function opsLoadUtilisation() {
+    const theatreId = OPS_API_BASE === '/api/admin'
+        ? document.getElementById('opsUtilTheatre')?.value
+        : null;
+    const dateFrom = document.getElementById('opsUtilDateFrom')?.value || '';
+    const dateTo = document.getElementById('opsUtilDateTo')?.value || '';
+
+    const container = document.getElementById('opsUtilOverviewResult');
+    if (!container) return;
+    container.innerHTML = '<p style="color: var(--text-muted);">Loading...</p>';
+
+    try {
+        let endpoint;
+        if (OPS_API_BASE === '/api/admin') {
+            if (!theatreId) { container.innerHTML = '<p style="color: #ff5252;">Please select a theatre.</p>'; return; }
+            endpoint = `/utilisation?theatreId=${theatreId}&dateFrom=${dateFrom}&dateTo=${dateTo}`;
+        } else {
+            endpoint = `/utilisation?dateFrom=${dateFrom}&dateTo=${dateTo}`;
+        }
+
+        const result = await opsApiCall(endpoint);
+        if (!result) return;
+
+        const r = result.data;
+        if (!r.screens || r.screens.length === 0) {
+            container.innerHTML = '<p style="color: var(--text-muted);">No screens found for this theatre.</p>';
+            return;
+        }
+
+        const getStatusColor = (status) => {
+            if (status === 'GREEN') return '#4caf50';
+            if (status === 'YELLOW') return '#ff9800';
+            return '#f44336';
+        };
+
+        const getStatusLabel = (status) => {
+            if (status === 'GREEN') return 'Healthy';
+            if (status === 'YELLOW') return 'Underutilised';
+            return 'Wasted';
+        };
+
+        container.innerHTML = `
+            <h4 style="color: var(--text-primary); margin-bottom: 4px;">${r.theatreName}</h4>
+            <p style="color: var(--text-muted); font-size: 13px; margin-bottom: 16px;">${r.dateFrom} to ${r.dateTo}</p>
+            <div style="margin-bottom: 24px;">
+                ${r.screens.map(s => `
+                    <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 12px; padding: 12px; background: var(--bg-secondary); border-radius: 8px; border-left: 4px solid ${getStatusColor(s.status)};">
+                        <div style="flex: 1;">
+                            <div style="font-weight: 600; color: var(--text-primary);">${s.screenName} <span style="font-weight: 400; font-size: 12px; color: var(--text-muted);">(${s.totalSeats} seats)</span></div>
+                            <div style="font-size: 12px; color: var(--text-muted); margin-top: 2px;">${s.showCount} shows • ${s.activeHours}h active / ${s.operationalHours}h available</div>
+                        </div>
+                        <div style="text-align: right; min-width: 100px;">
+                            <div style="font-size: 24px; font-weight: 700; color: ${getStatusColor(s.status)};">${s.utilisationPercent}%</div>
+                            <div style="font-size: 11px; color: ${getStatusColor(s.status)};">${getStatusLabel(s.status)}</div>
+                        </div>
+                        <div style="width: 120px; height: 8px; background: var(--bg-primary); border-radius: 4px; overflow: hidden;">
+                            <div style="width: ${Math.min(s.utilisationPercent, 100)}%; height: 100%; background: ${getStatusColor(s.status)}; border-radius: 4px;"></div>
+                        </div>
+                    </div>
+                `).join('')}
+            </div>
+            <p style="color: var(--text-muted); font-size: 11px;">🟢 Healthy (≥60%) • 🟡 Underutilised (30-59%) • 🔴 Wasted (&lt;30%)</p>
+        `;
+    } catch (e) {
+        container.innerHTML = `<p style="color: #ff5252;">Error: ${e.message}</p>`;
+    }
+}
+
+// ================= CONFLICT CHECK =================
+
+async function opsCheckConflicts() {
+    const screenId = document.getElementById('opsConflictScreen')?.value;
+    const movieId = document.getElementById('opsConflictMovie')?.value;
+    const date = document.getElementById('opsConflictDate')?.value;
+    const time = document.getElementById('opsConflictTime')?.value;
+
+    if (!screenId || !movieId || !date || !time) {
+        alert('Please fill in all fields.');
+        return;
+    }
+
+    const container = document.getElementById('opsConflictResult');
+    container.innerHTML = '<p style="color: var(--text-muted);">Checking...</p>';
+
+    // Get duration from the selected movie option
+    const movieSelect = document.getElementById('opsConflictMovie');
+    const selectedOption = movieSelect.options[movieSelect.selectedIndex];
+    const duration = selectedOption?.getAttribute('data-duration') || 150;
+
+    const startTime = `${date}T${time}:00`;
+
+    try {
+        const endpoint = `/conflicts?screenId=${screenId}&startTime=${encodeURIComponent(startTime)}&durationMinutes=${duration}`;
+        const result = await opsApiCall(endpoint);
+        if (!result) return;
+
+        const r = result.data;
+        container.innerHTML = `
+            <div style="padding: 16px; border-radius: 8px; ${r.hasConflict ? 'background: rgba(244,67,54,0.1); border: 1px solid rgba(244,67,54,0.3);' : 'background: rgba(76,175,80,0.1); border: 1px solid rgba(76,175,80,0.3);'}">
+                <p style="font-weight: 600; margin: 0 0 4px 0; color: ${r.hasConflict ? '#f44336' : '#4caf50'};">${r.message}</p>
+                <p style="font-size: 12px; color: var(--text-muted); margin: 0;">${r.screenName} • ${r.proposedStart} to ${r.proposedEnd}</p>
+                ${r.conflicts && r.conflicts.length > 0 ? `
+                    <div style="margin-top: 12px;">
+                        ${r.conflicts.map(c => `
+                            <div style="padding: 8px; background: rgba(244,67,54,0.05); border-radius: 4px; margin-top: 6px; font-size: 13px;">
+                                <strong>${c.movieTitle}</strong> — ${c.showStartTime} to ${c.showEndTime}
+                            </div>
+                        `).join('')}
+                    </div>
+                ` : ''}
+            </div>
+        `;
+    } catch (e) {
+        container.innerHTML = `<p style="color: #ff5252;">Error: ${e.message}</p>`;
+    }
+}
+
+// Auto-fill duration when movie is selected
+function opsOnConflictMovieChange() {
+    const movieSelect = document.getElementById('opsConflictMovie');
+    const durationInput = document.getElementById('opsConflictDuration');
+    if (!movieSelect || !durationInput) return;
+    const selectedOption = movieSelect.options[movieSelect.selectedIndex];
+    const duration = selectedOption?.getAttribute('data-duration');
+    durationInput.value = duration ? `${duration} min` : '';
 }
