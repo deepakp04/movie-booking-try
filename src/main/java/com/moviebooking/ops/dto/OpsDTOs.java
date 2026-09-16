@@ -41,12 +41,20 @@ public class OpsDTOs {
     public record TicketHolderResponse(
         Long bookingId,
         String transactionId,
+        // Booking user (who made the purchase)
         String customerName,
         String customerPhone,
         String customerEmail,
+        // Per-seat attendee info (who is actually watching)
+        String attendeeName,
+        String attendeePhone,
+        String attendeeDob,
+        Boolean bookingForSelf,
+        // Seat details
         String seatCode,
         String seatTier,
         BigDecimal ticketPrice,
+        // Status
         LocalDateTime bookingTime,
         String bookingStatus,
         String paymentStatus,
@@ -228,6 +236,10 @@ public class OpsDTOs {
         String customerName,
         String customerPhone,
         String customerEmail,
+        String attendeeName,
+        String attendeePhone,
+        String attendeeDob,
+        Boolean bookingForSelf,
         String seatCode,
         String seatTier,
         BigDecimal ticketPrice,

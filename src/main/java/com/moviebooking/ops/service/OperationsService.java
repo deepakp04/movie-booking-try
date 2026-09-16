@@ -2,9 +2,11 @@ package com.moviebooking.ops.service;
 
 import com.moviebooking.auth.entity.User;
 import com.moviebooking.auth.repository.UserRepository;
+import com.moviebooking.booking.model.BookingAttendee;
 import com.moviebooking.booking.model.BookingStatus;
 import com.moviebooking.booking.model.SeatStatus;
 import com.moviebooking.booking.model.ShowSeat;
+import com.moviebooking.booking.repository.BookingAttendeeRepository;
 import com.moviebooking.booking.repository.BookingRepository;
 import com.moviebooking.booking.repository.ShowSeatRepository;
 import com.moviebooking.catalog.model.Show;
@@ -44,19 +46,22 @@ public class OperationsService {
     private final ShowSeatRepository showSeatRepository;
     private final PaymentTransactionRepository paymentRepository;
     private final UserRepository userRepository;
+    private final BookingAttendeeRepository attendeeRepository;
 
     public OperationsService(ShowRepository showRepository,
                              TheatreRepository theatreRepository,
                              BookingRepository bookingRepository,
                              ShowSeatRepository showSeatRepository,
                              PaymentTransactionRepository paymentRepository,
-                             UserRepository userRepository) {
+                             UserRepository userRepository,
+                             BookingAttendeeRepository attendeeRepository) {
         this.showRepository = showRepository;
         this.theatreRepository = theatreRepository;
         this.bookingRepository = bookingRepository;
         this.showSeatRepository = showSeatRepository;
         this.paymentRepository = paymentRepository;
         this.userRepository = userRepository;
+        this.attendeeRepository = attendeeRepository;
     }
 
     // ================= SHOW REPORT =================
@@ -239,6 +244,7 @@ public class OperationsService {
         List<TicketHolderSnapshot> holders = getTicketHoldersForShow(showId).stream()
                 .map(t -> new TicketHolderSnapshot(
                         t.bookingId(), t.transactionId(), t.customerName(), t.customerPhone(), t.customerEmail(),
+                        t.attendeeName(), t.attendeePhone(), t.attendeeDob(), t.bookingForSelf(),
                         t.seatCode(), t.seatTier(), t.ticketPrice(), t.bookingTime(),
                         t.bookingStatus(), t.paymentStatus(), t.paymentTransactionId()
                 ))
@@ -271,17 +277,35 @@ public class OperationsService {
             // Get payment info
             PaymentTransaction tx = paymentRepository.findByBookingId(booking.getId()).orElse(null);
 
-            // Get user info
+            // Get booking user info (fallback)
             User user = booking.getUser();
-            if (user == null) continue;
+            String bookingUserName = user != null && user.getName() != null ? user.getName() : "";
+            String bookingUserPhone = user != null && user.getPhone() != null ? user.getPhone() : "";
+            String bookingUserEmail = user != null && user.getEmail() != null ? user.getEmail() : "";
+
+            // Get attendees for this booking (each seat has its own name/DOB/phone)
+            List<BookingAttendee> attendees = attendeeRepository.findByBookingIdAndIsDeletedFalse(booking.getId());
+            // Build a lookup: seatCode -> attendee
+            java.util.Map<String, BookingAttendee> attendeeBySeat = new java.util.HashMap<>();
+            for (BookingAttendee att : attendees) {
+                if (att.getSeatCode() != null) {
+                    attendeeBySeat.put(att.getSeatCode(), att);
+                }
+            }
 
             for (ShowSeat seat : bookingSeats) {
+                BookingAttendee att = attendeeBySeat.get(seat.getSeatCode());
                 holders.add(new TicketHolderResponse(
                         booking.getId(),
                         booking.getTransactionId(),
-                        user.getName() != null ? user.getName() : "",
-                        user.getPhone() != null ? user.getPhone() : "",
-                        user.getEmail() != null ? user.getEmail() : "",
+                        bookingUserName,
+                        bookingUserPhone,
+                        bookingUserEmail,
+                        // Per-seat attendee info
+                        att != null && att.getAttendeeName() != null ? att.getAttendeeName() : bookingUserName,
+                        att != null && att.getPhone() != null ? att.getPhone() : bookingUserPhone,
+                        att != null && att.getDateOfBirth() != null ? att.getDateOfBirth().toString() : null,
+                        att != null ? att.getIsSelf() : null,
                         seat.getSeatCode(),
                         seat.getTierName() != null ? seat.getTierName() : "Standard",
                         seat.getPrice() != null ? seat.getPrice() : BigDecimal.ZERO,

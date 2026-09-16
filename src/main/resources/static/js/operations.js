@@ -314,11 +314,13 @@ async function opsLoadShowReport() {
                     <table class="data-table">
                         <thead>
                             <tr>
-                                <th>Booking ID</th>
-                                <th>Customer</th>
-                                <th>Phone</th>
-                                <th>Email</th>
                                 <th>Seat</th>
+                                <th>Attendee Name</th>
+                                <th>Phone</th>
+                                <th>DOB</th>
+                                <th>Booked For</th>
+                                <th>Booker</th>
+                                <th>Booker Email</th>
                                 <th>Tier</th>
                                 <th>Price</th>
                                 <th>Status</th>
@@ -327,11 +329,13 @@ async function opsLoadShowReport() {
                         <tbody>
                             ${r.ticketHolders.map(h => `
                                 <tr>
-                                    <td>${h.bookingId}</td>
-                                    <td>${h.customerName || ''}</td>
-                                    <td>${h.customerPhone || ''}</td>
-                                    <td>${h.customerEmail || ''}</td>
                                     <td><strong>${h.seatCode}</strong></td>
+                                    <td>${h.attendeeName || h.customerName || ''}</td>
+                                    <td>${h.attendeePhone || h.customerPhone || ''}</td>
+                                    <td>${h.attendeeDob || '—'}</td>
+                                    <td>${h.bookingForSelf === true ? 'Self' : h.bookingForSelf === false ? 'Others' : '—'}</td>
+                                    <td>${h.customerName || ''}</td>
+                                    <td>${h.customerEmail || ''}</td>
                                     <td>${h.seatTier || 'Standard'}</td>
                                     <td>₹${Number(h.ticketPrice).toLocaleString()}</td>
                                     <td><span class="badge badge-${h.bookingStatus === 'CONFIRMED' ? 'success' : 'warning'}">${h.bookingStatus}</span></td>
@@ -460,11 +464,13 @@ async function opsLoadTicketHolders() {
                     <table class="data-table">
                         <thead>
                             <tr>
-                                <th>Booking ID</th>
-                                <th>Customer</th>
-                                <th>Phone</th>
-                                <th>Email</th>
                                 <th>Seat</th>
+                                <th>Attendee Name</th>
+                                <th>Phone</th>
+                                <th>DOB</th>
+                                <th>Booked For</th>
+                                <th>Booker</th>
+                                <th>Booker Email</th>
                                 <th>Tier</th>
                                 <th>Price</th>
                                 <th>Booking Time</th>
@@ -475,11 +481,13 @@ async function opsLoadTicketHolders() {
                         <tbody>
                             ${holders.map(h => `
                                 <tr>
-                                    <td>${h.bookingId}</td>
-                                    <td>${h.customerName || ''}</td>
-                                    <td>${h.customerPhone || ''}</td>
-                                    <td>${h.customerEmail || ''}</td>
                                     <td><strong>${h.seatCode}</strong></td>
+                                    <td>${h.attendeeName || h.customerName || ''}</td>
+                                    <td>${h.attendeePhone || h.customerPhone || ''}</td>
+                                    <td>${h.attendeeDob || '—'}</td>
+                                    <td>${h.bookingForSelf === true ? 'Self' : h.bookingForSelf === false ? 'Others' : '—'}</td>
+                                    <td>${h.customerName || ''}</td>
+                                    <td>${h.customerEmail || ''}</td>
                                     <td>${h.seatTier || 'Standard'}</td>
                                     <td>₹${Number(h.ticketPrice).toLocaleString()}</td>
                                     <td>${h.bookingTime ? new Date(h.bookingTime).toLocaleString() : ''}</td>
