@@ -302,9 +302,10 @@ public class AdminOperationsController {
             HttpServletRequest request) {
 
         List<CustomerSearchResult> results = customer360Service.searchCustomers(q);
+        int resultSize = (results != null) ? results.size() : 0;
 
         auditLog(AuditAction.VIEW_TICKET_HOLDERS, "CUSTOMER", null, null, null,
-                "Searched customers: [" + q + "] (" + results.size() + " results)", request);
+                "Searched customers : {" + q + "[(" + resultSize + " results)", request);
 
         return ApiResponse.success("Customer search completed", results);
     }
