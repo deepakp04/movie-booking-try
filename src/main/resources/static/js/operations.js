@@ -38,6 +38,11 @@ function opsInit() {
     const filterTo = document.getElementById('opsFilterDateTo');
     if (filterFrom && !filterFrom.value) filterFrom.value = thirtyDaysAgo.toISOString().split('T')[0];
     if (filterTo && !filterTo.value) filterTo.value = today.toISOString().split('T')[0];
+    // Also set default date filters for ticket holders section
+    const thFilterFrom = document.getElementById('opsTHFilterDateFrom');
+    const thFilterTo = document.getElementById('opsTHFilterDateTo');
+    if (thFilterFrom && !thFilterFrom.value) thFilterFrom.value = thirtyDaysAgo.toISOString().split('T')[0];
+    if (thFilterTo && !thFilterTo.value) thFilterTo.value = today.toISOString().split('T')[0];
 }
 
 // ================= SECTION NAVIGATION =================

@@ -106,26 +106,29 @@ public class ExcelExportService {
 
         // Sheet 2: Ticket Holders
         Sheet holders = workbook.createSheet("Ticket Holders");
-        String[] holderHeaders = {"Booking ID", "Customer Name", "Phone", "Email", "Seat", "Tier", "Price", "Booking Time", "Status", "Payment Status", "Transaction ID"};
+        String[] holderHeaders = {"Seat", "Attendee Name", "Attendee Phone", "DOB", "Booked For", "Booker Name", "Booker Email", "Tier", "Price", "Booking ID", "Booking Time", "Status", "Payment Status", "Transaction ID"};
         writeHeaderRow(holders, 0, holderHeaders, headerStyle);
 
         JsonNode ticketHolders = data.path("ticketHolders");
         int rowIdx = 1;
         for (JsonNode h : ticketHolders) {
             Row row = holders.createRow(rowIdx++);
-            row.createCell(0).setCellValue(h.path("bookingId").asLong());
-            row.createCell(1).setCellValue(h.path("customerName").asText(""));
-            row.createCell(2).setCellValue(h.path("customerPhone").asText(""));
-            row.createCell(3).setCellValue(h.path("customerEmail").asText(""));
-            row.createCell(4).setCellValue(h.path("seatCode").asText(""));
-            row.createCell(5).setCellValue(h.path("seatTier").asText(""));
-            Cell priceCell = row.createCell(6);
+            row.createCell(0).setCellValue(h.path("seatCode").asText(""));
+            row.createCell(1).setCellValue(h.path("attendeeName").asText(h.path("customerName").asText("")));
+            row.createCell(2).setCellValue(h.path("attendeePhone").asText(h.path("customerPhone").asText("")));
+            row.createCell(3).setCellValue(h.path("attendeeDob").asText(""));
+            row.createCell(4).setCellValue(h.path("bookingForSelf").asBoolean(false) ? "Self" : "Others");
+            row.createCell(5).setCellValue(h.path("customerName").asText(""));
+            row.createCell(6).setCellValue(h.path("customerEmail").asText(""));
+            row.createCell(7).setCellValue(h.path("seatTier").asText(""));
+            Cell priceCell = row.createCell(8);
             priceCell.setCellValue(h.path("ticketPrice").asDouble(0));
             priceCell.setCellStyle(currencyStyle);
-            row.createCell(7).setCellValue(h.path("bookingTime").asText(""));
-            row.createCell(8).setCellValue(h.path("bookingStatus").asText(""));
-            row.createCell(9).setCellValue(h.path("paymentStatus").asText(""));
-            row.createCell(10).setCellValue(h.path("paymentTransactionId").asText(""));
+            row.createCell(9).setCellValue(h.path("bookingId").asLong());
+            row.createCell(10).setCellValue(h.path("bookingTime").asText(""));
+            row.createCell(11).setCellValue(h.path("bookingStatus").asText(""));
+            row.createCell(12).setCellValue(h.path("paymentStatus").asText(""));
+            row.createCell(13).setCellValue(h.path("paymentTransactionId").asText(""));
         }
         autoSizeColumns(holders, holderHeaders.length);
 
@@ -202,25 +205,28 @@ public class ExcelExportService {
         CellStyle currencyStyle = createCurrencyStyle(workbook);
 
         Sheet sheet = workbook.createSheet("Ticket Holders");
-        String[] headers = {"Booking ID", "Customer Name", "Phone", "Email", "Seat", "Tier", "Price", "Booking Time", "Status", "Payment Status", "Transaction ID"};
+        String[] headers = {"Seat", "Attendee Name", "Attendee Phone", "DOB", "Booked For", "Booker Name", "Booker Email", "Tier", "Price", "Booking ID", "Booking Time", "Status", "Payment Status", "Transaction ID"};
         writeHeaderRow(sheet, 0, headers, headerStyle);
 
         int rowIdx = 1;
         for (JsonNode h : data) {
             Row row = sheet.createRow(rowIdx++);
-            row.createCell(0).setCellValue(h.path("bookingId").asLong());
-            row.createCell(1).setCellValue(h.path("customerName").asText(""));
-            row.createCell(2).setCellValue(h.path("customerPhone").asText(""));
-            row.createCell(3).setCellValue(h.path("customerEmail").asText(""));
-            row.createCell(4).setCellValue(h.path("seatCode").asText(""));
-            row.createCell(5).setCellValue(h.path("seatTier").asText(""));
-            Cell priceCell = row.createCell(6);
+            row.createCell(0).setCellValue(h.path("seatCode").asText(""));
+            row.createCell(1).setCellValue(h.path("attendeeName").asText(h.path("customerName").asText("")));
+            row.createCell(2).setCellValue(h.path("attendeePhone").asText(h.path("customerPhone").asText("")));
+            row.createCell(3).setCellValue(h.path("attendeeDob").asText(""));
+            row.createCell(4).setCellValue(h.path("bookingForSelf").asBoolean(false) ? "Self" : "Others");
+            row.createCell(5).setCellValue(h.path("customerName").asText(""));
+            row.createCell(6).setCellValue(h.path("customerEmail").asText(""));
+            row.createCell(7).setCellValue(h.path("seatTier").asText(""));
+            Cell priceCell = row.createCell(8);
             priceCell.setCellValue(h.path("ticketPrice").asDouble(0));
             priceCell.setCellStyle(currencyStyle);
-            row.createCell(7).setCellValue(h.path("bookingTime").asText(""));
-            row.createCell(8).setCellValue(h.path("bookingStatus").asText(""));
-            row.createCell(9).setCellValue(h.path("paymentStatus").asText(""));
-            row.createCell(10).setCellValue(h.path("paymentTransactionId").asText(""));
+            row.createCell(9).setCellValue(h.path("bookingId").asLong());
+            row.createCell(10).setCellValue(h.path("bookingTime").asText(""));
+            row.createCell(11).setCellValue(h.path("bookingStatus").asText(""));
+            row.createCell(12).setCellValue(h.path("paymentStatus").asText(""));
+            row.createCell(13).setCellValue(h.path("paymentTransactionId").asText(""));
         }
         autoSizeColumns(sheet, headers.length);
 
@@ -271,23 +277,26 @@ public class ExcelExportService {
             JsonNode holders = bookingSummary.path("ticketHolders");
             if (holders.isArray() && holders.size() > 0) {
                 Sheet holderSheet = workbook.createSheet("Ticket Holders");
-                String[] holderHeaders = {"Booking ID", "Customer Name", "Phone", "Email", "Seat", "Tier", "Price", "Booking Time", "Status", "Payment Status"};
+                String[] holderHeaders = {"Seat", "Attendee Name", "Attendee Phone", "DOB", "Booked For", "Booker Name", "Booker Email", "Tier", "Price", "Booking ID", "Booking Time", "Status", "Payment Status"};
                 writeHeaderRow(holderSheet, 0, holderHeaders, headerStyle);
                 int rowIdx = 1;
                 for (JsonNode h : holders) {
                     Row row = holderSheet.createRow(rowIdx++);
-                    row.createCell(0).setCellValue(h.path("bookingId").asLong());
-                    row.createCell(1).setCellValue(h.path("customerName").asText(""));
-                    row.createCell(2).setCellValue(h.path("customerPhone").asText(""));
-                    row.createCell(3).setCellValue(h.path("customerEmail").asText(""));
-                    row.createCell(4).setCellValue(h.path("seatCode").asText(""));
-                    row.createCell(5).setCellValue(h.path("seatTier").asText(""));
-                    Cell priceCell = row.createCell(6);
+                    row.createCell(0).setCellValue(h.path("seatCode").asText(""));
+                    row.createCell(1).setCellValue(h.path("attendeeName").asText(h.path("customerName").asText("")));
+                    row.createCell(2).setCellValue(h.path("attendeePhone").asText(h.path("customerPhone").asText("")));
+                    row.createCell(3).setCellValue(h.path("attendeeDob").asText(""));
+                    row.createCell(4).setCellValue(h.path("bookingForSelf").asBoolean(false) ? "Self" : "Others");
+                    row.createCell(5).setCellValue(h.path("customerName").asText(""));
+                    row.createCell(6).setCellValue(h.path("customerEmail").asText(""));
+                    row.createCell(7).setCellValue(h.path("seatTier").asText(""));
+                    Cell priceCell = row.createCell(8);
                     priceCell.setCellValue(h.path("ticketPrice").asDouble(0));
                     priceCell.setCellStyle(currencyStyle);
-                    row.createCell(7).setCellValue(h.path("bookingTime").asText(""));
-                    row.createCell(8).setCellValue(h.path("bookingStatus").asText(""));
-                    row.createCell(9).setCellValue(h.path("paymentStatus").asText(""));
+                    row.createCell(9).setCellValue(h.path("bookingId").asLong());
+                    row.createCell(10).setCellValue(h.path("bookingTime").asText(""));
+                    row.createCell(11).setCellValue(h.path("bookingStatus").asText(""));
+                    row.createCell(12).setCellValue(h.path("paymentStatus").asText(""));
                 }
                 autoSizeColumns(holderSheet, holderHeaders.length);
             }
