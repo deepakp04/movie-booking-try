@@ -189,13 +189,18 @@ public class OpsDTOs {
         LocalDateTime startTime,
         String language,
         String format,
-        Long theatreId
+        Long theatreId,
+        // Parent ids so the ops filters can narrow city -> theatre -> screen -> movie
+        Long cityId,
+        Long movieId,
+        Long screenId
     ) {}
 
     public record TheatreDropdownItem(
         Long id,
         String name,
-        String cityName
+        String cityName,
+        Long cityId
     ) {}
 
     public record CityDropdownItem(
@@ -211,13 +216,16 @@ public class OpsDTOs {
     public record ScreenFilterItem(
         Long id,
         String name,
-        String theatreName
+        String theatreName,
+        Long theatreId,
+        Long cityId
     ) {}
 
     public record FilterOptionsResponse(
         List<TheatreDropdownItem> theatres,
         List<MovieFilterItem> movies,
-        List<ScreenFilterItem> screens
+        List<ScreenFilterItem> screens,
+        List<CityDropdownItem> cities
     ) {}
 
     // ================= CUSTOMER 360 =================

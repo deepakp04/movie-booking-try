@@ -222,12 +222,32 @@ public class OperationsService {
     // ================= TICKET HOLDER REPORT =================
 
     public List<TicketHolderResponse> getTicketHolders(Long showId, Long restrictToTheatreId) {
+        return getTicketHolders(showId, restrictToTheatreId, "CONFIRMED");
+    }
+
+    /**
+     * Ticket holders for a show, optionally narrowed by booking status.
+     *
+     * @param statusFilter CONFIRMED (default), ALL, CANCELLED, EXPIRED or PENDING_PAYMENT
+     */
+    public List<TicketHolderResponse> getTicketHolders(Long showId, Long restrictToTheatreId, String statusFilter) {
         Show show = showRepository.findByIdAndIsDeletedFalse(showId)
                 .orElseThrow(() -> new ResourceNotFoundException("Show not found with ID: " + showId));
 
         validateTheatreScope(show.getScreen().getTheatre().getId(), restrictToTheatreId);
 
-        return getTicketHoldersForShow(showId);
+        return getTicketHoldersForShow(showId, parseStatusFilter(statusFilter));
+    }
+
+    private List<BookingStatus> parseStatusFilter(String statusFilter) {
+        if (statusFilter == null || statusFilter.isBlank() || "ALL".equalsIgnoreCase(statusFilter)) {
+            return List.of(BookingStatus.values());
+        }
+        try {
+            return List.of(BookingStatus.valueOf(statusFilter.trim().toUpperCase(Locale.ENGLISH)));
+        } catch (IllegalArgumentException e) {
+            throw new BusinessException("Unknown booking status filter: " + statusFilter);
+        }
     }
 
     // ================= BOOKING COUNTS =================
@@ -258,21 +278,58 @@ public class OperationsService {
 
     // ================= HELPER METHODS =================
 
+    /** Confirmed-only holders — used by show reports and report snapshots. */
     private List<TicketHolderResponse> getTicketHoldersForShow(Long showId) {
+        return getTicketHoldersForShow(showId, List.of(BookingStatus.CONFIRMED));
+    }
+
+    private List<TicketHolderResponse> getTicketHoldersForShow(Long showId, List<BookingStatus> statuses) {
         List<TicketHolderResponse> holders = new ArrayList<>();
 
-        List<com.moviebooking.booking.model.Booking> bookings = bookingRepository.findByShowId(showId);
-        List<com.moviebooking.booking.model.Booking> confirmedBookings = bookings.stream()
-                .filter(b -> b.getStatus() == BookingStatus.CONFIRMED)
+        List<com.moviebooking.booking.model.Booking> bookings = bookingRepository.findByShowId(showId).stream()
+                .filter(b -> statuses.contains(b.getStatus()))
                 .toList();
 
         List<ShowSeat> allSeats = showSeatRepository.findByShowId(showId);
 
-        for (com.moviebooking.booking.model.Booking booking : confirmedBookings) {
-            // Get seats for this booking
-            List<ShowSeat> bookingSeats = allSeats.stream()
+        // Seat lookup by code. Cancelled / expired bookings release their show_seat
+        // rows (booking_id is cleared), so their seats are resolved from the
+        // booking's own seat_codes snapshot instead.
+        java.util.Map<String, ShowSeat> seatByCode = new java.util.HashMap<>();
+        for (ShowSeat s : allSeats) {
+            if (s.getSeatCode() != null) {
+                seatByCode.putIfAbsent(s.getSeatCode(), s);
+            }
+        }
+
+        for (com.moviebooking.booking.model.Booking booking : bookings) {
+            // Seats still held by this booking
+            List<ShowSeat> bookedSeats = allSeats.stream()
                     .filter(s -> booking.getId().equals(s.getBookingId()) && s.getStatus() == SeatStatus.BOOKED)
                     .toList();
+
+            // Which seats to report on
+            List<SeatRow> reportSeats = new ArrayList<>();
+            if (!bookedSeats.isEmpty()) {
+                for (ShowSeat seat : bookedSeats) {
+                    reportSeats.add(new SeatRow(
+                            seat.getSeatCode(),
+                            seat.getTierName() != null ? seat.getTierName() : "Standard",
+                            seat.getPrice() != null ? seat.getPrice() : BigDecimal.ZERO));
+                }
+            } else if (booking.getSeatCodes() != null && !booking.getSeatCodes().isBlank()) {
+                for (String raw : booking.getSeatCodes().split(",")) {
+                    String code = raw.trim();
+                    if (code.isEmpty()) {
+                        continue;
+                    }
+                    ShowSeat seat = seatByCode.get(code);
+                    reportSeats.add(new SeatRow(
+                            code,
+                            seat != null && seat.getTierName() != null ? seat.getTierName() : "Standard",
+                            seat != null && seat.getPrice() != null ? seat.getPrice() : BigDecimal.ZERO));
+                }
+            }
 
             // Get payment info
             PaymentTransaction tx = paymentRepository.findByBookingId(booking.getId()).orElse(null);
@@ -293,8 +350,8 @@ public class OperationsService {
                 }
             }
 
-            for (ShowSeat seat : bookingSeats) {
-                BookingAttendee att = attendeeBySeat.get(seat.getSeatCode());
+            for (SeatRow seat : reportSeats) {
+                BookingAttendee att = attendeeBySeat.get(seat.seatCode());
                 holders.add(new TicketHolderResponse(
                         booking.getId(),
                         booking.getTransactionId(),
@@ -306,9 +363,9 @@ public class OperationsService {
                         att != null && att.getPhone() != null ? att.getPhone() : bookingUserPhone,
                         att != null && att.getDateOfBirth() != null ? att.getDateOfBirth().toString() : null,
                         att != null ? att.getIsSelf() : null,
-                        seat.getSeatCode(),
-                        seat.getTierName() != null ? seat.getTierName() : "Standard",
-                        seat.getPrice() != null ? seat.getPrice() : BigDecimal.ZERO,
+                        seat.seatCode(),
+                        seat.tierName(),
+                        seat.price(),
                         booking.getCreatedAt(),
                         booking.getStatus().name(),
                         tx != null ? tx.getStatus().name() : "N/A",
@@ -319,6 +376,9 @@ public class OperationsService {
 
         return holders;
     }
+
+    /** Lightweight seat view used while assembling ticket holder rows. */
+    private record SeatRow(String seatCode, String tierName, BigDecimal price) {}
 
     private BigDecimal calculateRevenueFromSeats(Long showId) {
         List<ShowSeat> seats = showSeatRepository.findByShowId(showId);
@@ -338,11 +398,7 @@ public class OperationsService {
 
     public List<TheatreDropdownItem> getAllTheatres() {
         return theatreRepository.findByIsDeletedFalseOrderByNameAsc().stream()
-                .map(t -> new TheatreDropdownItem(
-                        t.getId(),
-                        t.getName(),
-                        t.getCity() != null ? t.getCity().getName() : ""
-                ))
+                .map(this::toTheatreDropdown)
                 .toList();
     }
 
@@ -375,12 +431,17 @@ public class OperationsService {
     public List<TheatreDropdownItem> getFilteredTheatres(Long cityId) {
         return theatreRepository.findByIsDeletedFalseOrderByNameAsc().stream()
                 .filter(t -> cityId == null || (t.getCity() != null && t.getCity().getId().equals(cityId)))
-                .map(t -> new TheatreDropdownItem(
-                        t.getId(),
-                        t.getName(),
-                        t.getCity() != null ? t.getCity().getName() : ""
-                ))
+                .map(this::toTheatreDropdown)
                 .toList();
+    }
+
+    private TheatreDropdownItem toTheatreDropdown(Theatre t) {
+        return new TheatreDropdownItem(
+                t.getId(),
+                t.getName(),
+                t.getCity() != null ? t.getCity().getName() : "",
+                t.getCity() != null ? t.getCity().getId() : null
+        );
     }
 
     public List<ShowDropdownItem> getShowsByTheatre(Long theatreId) {
@@ -391,16 +452,22 @@ public class OperationsService {
     }
 
     private ShowDropdownItem toShowDropdown(Show s) {
+        var screen = s.getScreen();
+        var theatre = screen != null ? screen.getTheatre() : null;
+        var city = theatre != null ? theatre.getCity() : null;
         return new ShowDropdownItem(
                 s.getId(),
                 s.getMovie() != null ? s.getMovie().getTitle() : "Unknown",
-                s.getScreen() != null ? s.getScreen().getName() : "",
-                s.getScreen() != null && s.getScreen().getTheatre() != null ? s.getScreen().getTheatre().getName() : "",
-                s.getScreen() != null && s.getScreen().getTheatre() != null && s.getScreen().getTheatre().getCity() != null ? s.getScreen().getTheatre().getCity().getName() : "",
+                screen != null ? screen.getName() : "",
+                theatre != null ? theatre.getName() : "",
+                city != null ? city.getName() : "",
                 s.getStartTime(),
                 s.getLanguage() != null ? s.getLanguage().name() : "",
                 s.getFormat() != null ? s.getFormat().name() : "",
-                s.getScreen() != null && s.getScreen().getTheatre() != null ? s.getScreen().getTheatre().getId() : null
+                theatre != null ? theatre.getId() : null,
+                city != null ? city.getId() : null,
+                s.getMovie() != null ? s.getMovie().getId() : null,
+                screen != null ? screen.getId() : null
         );
     }
 }

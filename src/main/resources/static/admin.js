@@ -369,6 +369,9 @@ async function loadTheatres() {
 
         // Feed the Maintenance tab's theatre picker from the same data.
         if (typeof mtPopulateTheatres === 'function') mtPopulateTheatres();
+
+        // Re-apply whatever search term is in the box, and refresh the count.
+        applyTheatreSearch();
     } catch (err) {
         console.error('[RENDER ERROR]', err);
         showAlert(`Something failed while rendering: ${err.message}`, 'error');
@@ -572,6 +575,14 @@ document.getElementById('addShowForm')?.addEventListener('submit', async (e) => 
             }
         }
 
+        // Catch the obvious input mistakes locally; the server validates the
+        // same rules and remains the source of truth.
+        const scheduleProblem = validateShowSchedule(payload, showTiers.length);
+        if (scheduleProblem) {
+            showAlert(scheduleProblem, 'error');
+            return;
+        }
+
         try {
             await adminApiCall('/shows', 'POST', payload);
             showAlert('Show scheduled successfully!', 'success');
@@ -616,6 +627,113 @@ async function deleteShow(id) {
 // 4. Save Layout Schema to Backend API
 
 
+
+/* =====================================================================
+   Theatre search + show scheduling input guards.
+   The scheduling rules mirror ShowScheduleValidator on the server, which stays
+   the source of truth; these only save a round trip and read better inline.
+   ===================================================================== */
+
+/**
+ * Filters the already-rendered theatre cards by name / city / address.
+ * window.__theatreCache is filled in the same order as the rendered cards, so
+ * the card for index i belongs to cache entry i.
+ */
+function applyTheatreSearch() {
+    const container = document.getElementById('theatresListContainer');
+    if (!container) return;
+    const cache = window.__theatreCache || [];
+    const term = (document.getElementById('theatreSearchBox')?.value || '').trim().toLowerCase();
+
+    let visible = 0;
+    Array.from(container.children).forEach((card, idx) => {
+        if (!card.hasAttribute || card.hasAttribute('data-theatre-empty')) return;
+        const t = cache[idx] || {};
+        const haystack = [t.name, t.cityName, t.address]
+            .filter(Boolean).join(' ').toLowerCase();
+        const matches = !term || haystack.includes(term);
+        card.style.display = matches ? '' : 'none';
+        if (matches) visible++;
+    });
+
+    const countEl = document.getElementById('theatreCount');
+    if (countEl) {
+        countEl.textContent = term
+            ? `${visible} of ${cache.length} theatre(s) match "${term}"`
+            : (cache.length ? `${cache.length} theatre(s)` : '');
+    }
+
+    let empty = container.querySelector('[data-theatre-empty]');
+    if (cache.length > 0 && visible === 0) {
+        if (!empty) {
+            empty = document.createElement('p');
+            empty.setAttribute('data-theatre-empty', '');
+            empty.style.cssText = 'color: var(--text-muted); font-style: italic;';
+            empty.textContent = 'No theatre matches that search. Clear the box to see all theatres.';
+            container.appendChild(empty);
+        }
+    } else if (empty) {
+        empty.remove();
+    }
+}
+
+function toLocalInputValue(date) {
+    const pad = n => String(n).padStart(2, '0');
+    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
+        + `T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
+// Keep the native picker from offering past dates at all.
+function primeShowStartTimeBounds(inputId) {
+    const el = document.getElementById(inputId);
+    if (!el) return;
+    const refresh = () => { el.min = toLocalInputValue(new Date()); };
+    refresh();
+    el.addEventListener('focus', refresh);
+}
+primeShowStartTimeBounds('showStartTime');
+
+/**
+ * Returns the first scheduling problem as a message, or '' when the payload is
+ * good enough to send.
+ */
+function validateShowSchedule(payload, tierCount) {
+    if (!payload.screenId || Number.isNaN(payload.screenId)) return 'Select an auditorium / screen.';
+    if (!payload.movieId || Number.isNaN(payload.movieId)) return 'Select a movie.';
+    if (!payload.startTime) return 'Choose a start date and time.';
+    if (!payload.format) return 'Select a screening format.';
+    if (!payload.language) return 'Select an audio language.';
+
+    const start = new Date(payload.startTime);
+    if (Number.isNaN(start.getTime())) {
+        return 'That start date and time could not be understood. Pick it again.';
+    }
+    if (start <= new Date()) {
+        return 'A show cannot be scheduled in the past. Pick a start time in the future.';
+    }
+    if ((start - new Date()) > 365 * 24 * 60 * 60 * 1000) {
+        return 'That start time is more than a year away. Schedule shows within the next 12 months.';
+    }
+
+    const price = payload.basePrice;
+    if (price !== undefined && price !== null && !(price > 0)) {
+        return 'Ticket price must be greater than zero.';
+    }
+    if (tierCount > 0 && (payload.tierPrices || []).some(p => !(p.price > 0))) {
+        return 'Every seat tier needs a ticket price greater than zero.';
+    }
+
+    const seen = new Set();
+    for (const code of (payload.reservedSeatCodes || [])) {
+        const key = String(code).toUpperCase();
+        if (seen.has(key)) {
+            return `Seat ${code} is listed twice. Each reserved seat can only be listed once.`;
+        }
+        seen.add(key);
+    }
+
+    return '';
+}
 
 /* =====================================================================
    Phase 2 CRUD handlers.

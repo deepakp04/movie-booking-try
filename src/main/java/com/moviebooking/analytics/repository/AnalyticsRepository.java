@@ -707,11 +707,11 @@ public class AnalyticsRepository {
             """;
         List<Object[]> movieRows = em.createNativeQuery(movieSql).getResultList();
         List<FilterOption> movies = movieRows.stream()
-            .map(r -> new FilterOption(toLong(r[0]), String.valueOf(r[1])))
+            .map(r -> new FilterOption(toLong(r[0]), String.valueOf(r[1]), null))
             .toList();
 
         String theatreSql = """
-            SELECT DISTINCT t.id, t.name
+            SELECT DISTINCT t.id, t.name, t.city_id
             FROM theatres t
             JOIN screens scr ON scr.theatre_id = t.id
             JOIN shows s ON s.screen_id = scr.id
@@ -721,11 +721,12 @@ public class AnalyticsRepository {
             """;
         List<Object[]> theatreRows = em.createNativeQuery(theatreSql).getResultList();
         List<FilterOption> theatres = theatreRows.stream()
-            .map(r -> new FilterOption(toLong(r[0]), String.valueOf(r[1])))
+            .map(r -> new FilterOption(toLong(r[0]), String.valueOf(r[1]),
+                r[2] != null ? toLong(r[2]) : null))
             .toList();
 
         String screenSql = """
-            SELECT DISTINCT scr.id, scr.name
+            SELECT DISTINCT scr.id, scr.name, scr.theatre_id
             FROM screens scr
             JOIN theatres t ON scr.theatre_id = t.id
             JOIN shows s ON s.screen_id = scr.id
@@ -735,7 +736,8 @@ public class AnalyticsRepository {
             """;
         List<Object[]> screenRows = em.createNativeQuery(screenSql).getResultList();
         List<FilterOption> screens = screenRows.stream()
-            .map(r -> new FilterOption(toLong(r[0]), String.valueOf(r[1])))
+            .map(r -> new FilterOption(toLong(r[0]), String.valueOf(r[1]),
+                r[2] != null ? toLong(r[2]) : null))
             .toList();
 
         String citySql = """
@@ -751,24 +753,24 @@ public class AnalyticsRepository {
             """;
         List<Object[]> cityRows = em.createNativeQuery(citySql).getResultList();
         List<FilterOption> cities = cityRows.stream()
-            .map(r -> new FilterOption(toLong(r[0]), String.valueOf(r[1])))
+            .map(r -> new FilterOption(toLong(r[0]), String.valueOf(r[1]), null))
             .toList();
 
         List<FilterOption> formats = List.of(
-            new FilterOption(null, "TWO_D"),
-            new FilterOption(null, "THREE_D"),
-            new FilterOption(null, "IMAX_2D"),
-            new FilterOption(null, "IMAX_3D"),
-            new FilterOption(null, "FOUR_DX")
+            new FilterOption(null, "TWO_D", null),
+            new FilterOption(null, "THREE_D", null),
+            new FilterOption(null, "IMAX_2D", null),
+            new FilterOption(null, "IMAX_3D", null),
+            new FilterOption(null, "FOUR_DX", null)
         );
 
         List<FilterOption> languages = List.of(
-            new FilterOption(null, "ENGLISH"),
-            new FilterOption(null, "TAMIL"),
-            new FilterOption(null, "HINDI"),
-            new FilterOption(null, "TELUGU"),
-            new FilterOption(null, "KANNADA"),
-            new FilterOption(null, "MALAYALAM")
+            new FilterOption(null, "ENGLISH", null),
+            new FilterOption(null, "TAMIL", null),
+            new FilterOption(null, "HINDI", null),
+            new FilterOption(null, "TELUGU", null),
+            new FilterOption(null, "KANNADA", null),
+            new FilterOption(null, "MALAYALAM", null)
         );
 
         return new FilterOptionsResponse(movies, theatres, screens, cities, formats, languages);

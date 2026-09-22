@@ -28,6 +28,7 @@ import com.moviebooking.catalog.repository.TheatreRepository;
 import com.moviebooking.catalog.service.ScreenManagementService;
 import com.moviebooking.catalog.service.SeatConfigService;
 import com.moviebooking.catalog.service.ShowPricingService;
+import com.moviebooking.catalog.service.ShowScheduleValidator;
 import com.moviebooking.common.exception.BusinessException;
 import com.moviebooking.common.exception.ResourceNotFoundException;
 import com.moviebooking.owner.dto.OwnerDTOs.LayoutSaveRequest;
@@ -64,6 +65,7 @@ public class OwnerService {
     private final ScreenSeatRepository screenSeatRepository;
     private final com.moviebooking.booking.repository.ShowSeatRepository showSeatRepository;
     private final BookingService bookingService;
+    private final ShowScheduleValidator showScheduleValidator;
 
     public OwnerService(UserRepository userRepository,
                          TheatreRepository theatreRepository,
@@ -75,7 +77,8 @@ public class OwnerService {
                          ShowPricingService showPricing,
                          ScreenSeatRepository screenSeatRepository,
                          com.moviebooking.booking.repository.ShowSeatRepository showSeatRepository,
-                         BookingService bookingService) {
+                         BookingService bookingService,
+                         ShowScheduleValidator showScheduleValidator) {
         this.userRepository = userRepository;
         this.theatreRepository = theatreRepository;
         this.screenRepository = screenRepository;
@@ -87,6 +90,7 @@ public class OwnerService {
         this.screenSeatRepository = screenSeatRepository;
         this.showSeatRepository = showSeatRepository;
         this.bookingService = bookingService;
+        this.showScheduleValidator = showScheduleValidator;
     }
 
     // Resolves the theatre owned by whoever is currently authenticated.
@@ -179,22 +183,41 @@ public class OwnerService {
     public ShowResponse scheduleShow(ShowRequest req) {
         Theatre t = currentOwnersTheatre();
 
-        Screen screen = screenRepository.findByIdAndIsDeletedFalse(req.screenId())
+        if (req.screenId() == null) {
+            throw new BusinessException("Select a screen before scheduling a show.");
+        }
+
+        // Scope check first: an owner may only ever schedule onto their own screens.
+        Screen scopedScreen = screenRepository.findByIdAndIsDeletedFalse(req.screenId())
                 .filter(s -> s.getTheatre() != null && s.getTheatre().getId().equals(t.getId()))
                 .orElseThrow(() -> new ResourceNotFoundException(
                         "Screen not found in your theatre with ID: " + req.screenId()));
 
-        Movie movie = movieRepository.findByIdAndIsDeletedFalse(req.movieId())
-                .orElseThrow(() -> new ResourceNotFoundException("Movie not found with ID: " + req.movieId()));
+        // Shared with the admin portal, so both enforce identical input rules.
+        ShowScheduleValidator.ValidatedSchedule validated = showScheduleValidator.validate(
+                scopedScreen.getId(),
+                req.movieId(),
+                req.startTime(),
+                req.language(),
+                req.format(),
+                req.hasCaptions(),
+                req.basePrice(),
+                req.tierPrices() != null
+                        ? req.tierPrices().stream().map(TierPriceRequest::price).toList()
+                        : null,
+                req.reservedSeatCodes());
+
+        Screen screen = validated.screen();
+        Movie movie = validated.movie();
 
         Show show = new Show();
         show.setScreen(screen);
         show.setMovie(movie);
-        show.setStartTime(req.startTime());
-        show.setLanguage(req.language());
-        show.setFormat(req.format());
-        show.setHasCaptions(req.hasCaptions() != null ? req.hasCaptions() : false);
-        show.setBasePrice(req.basePrice());
+        show.setStartTime(validated.startTime());
+        show.setLanguage(validated.language());
+        show.setFormat(validated.format());
+        show.setHasCaptions(validated.hasCaptions());
+        show.setBasePrice(validated.basePrice());
         if (show.getBasePrice() == null) {
             show.setBasePrice(cheapestTierPrice(req.tierPrices()));
         }
@@ -203,8 +226,8 @@ public class OwnerService {
 
         // Reserve seats at scheduling time if requested (e.g. house seats,
         // complimentary blocks). These seats are marked BOOKED immediately.
-        if (req.reservedSeatCodes() != null && !req.reservedSeatCodes().isEmpty()) {
-            reserveSeatsAtScheduling(saved, req.reservedSeatCodes());
+        if (!validated.reservedSeatCodes().isEmpty()) {
+            reserveSeatsAtScheduling(saved, validated.reservedSeatCodes());
         }
 
         return toShowResponse(saved);

@@ -1,5 +1,7 @@
 package com.moviebooking.analytics.dto;
 
+import com.moviebooking.common.exception.BusinessException;
+
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -25,6 +27,18 @@ public final class AnalyticsDTOs {
         String format,
         String language
     ) {
+        /**
+         * An impossible range is rejected up front, so every analytics endpoint
+         * reports a readable message instead of quietly returning empty charts
+         * when Date From is picked after Date To.
+         */
+        public AnalyticsFilter {
+            if (dateFrom != null && dateTo != null && dateFrom.isAfter(dateTo)) {
+                throw new BusinessException("Start date (" + dateFrom
+                        + ") cannot be after end date (" + dateTo + "). Pick a valid date range.");
+            }
+        }
+
         /** Defaults to last 30 days if dates are null. */
         public LocalDate effectiveDateFrom() {
             return dateFrom != null ? dateFrom : LocalDate.now().minusDays(30);
@@ -204,7 +218,10 @@ public final class AnalyticsDTOs {
 
     public record FilterOption(
         Long id,
-        String name
+        String name,
+        // Parent id used by the UI to cascade city -> theatre -> screen.
+        // Null for options that have no parent (movies, formats, languages, cities).
+        Long parentId
     ) {}
 
     public record FilterOptionsResponse(

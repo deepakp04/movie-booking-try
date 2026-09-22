@@ -44,6 +44,12 @@ async function initAnalytics() {
 
 // ==================== FILTERS ====================
 
+// Raw filter options, kept so the cascade can rebuild a child list without
+// asking the API again.
+let analyticsFilterData = {
+    movies: [], theatres: [], screens: [], cities: [], formats: [], languages: []
+};
+
 async function loadFilterOptions() {
     try {
         const token = localStorage.getItem('accessToken');
@@ -54,49 +60,107 @@ async function loadFilterOptions() {
         if (!result.success) return;
 
         const f = result.data;
+        analyticsFilterData = {
+            movies: f.movies || [],
+            theatres: f.theatres || [],
+            screens: f.screens || [],
+            cities: f.cities || [],
+            formats: (f.formats || []).map(fmt => ({ id: fmt.name, name: fmt.name.replace('_', ' ') })),
+            languages: (f.languages || []).map(lang => ({ id: lang.name, name: lang.name }))
+        };
 
-        // Populate movie filter
-        populateSelect('filterMovie', f.movies, 'All Movies');
-
-        // Populate city filter
-        populateSelect('filterCity', f.cities, 'All Cities');
-
-        // Populate format filter
-        populateSelect('filterFormat',
-            f.formats.map(fmt => ({ id: fmt.name, name: fmt.name.replace('_', ' ') })),
-            'All Formats');
-
-        // Populate language filter
-        populateSelect('filterLanguage',
-            f.languages.map(lang => ({ id: lang.name, name: lang.name })),
-            'All Languages');
-
-        // Theatre filter (admin only — owner doesn't need it)
-        const theatreSelect = document.getElementById('filterTheatre');
-        if (theatreSelect) {
-            populateSelect('filterTheatre', f.theatres, 'All Theatres');
-        }
-
-        // Screen filter
-        const screenSelect = document.getElementById('filterScreen');
-        if (screenSelect) {
-            populateSelect('filterScreen', f.screens, 'All Screens');
-        }
+        populateSelect('filterCity', analyticsFilterData.cities, 'All Cities');
+        populateSelect('filterMovie', analyticsFilterData.movies, 'All Movies');
+        populateSelect('filterFormat', analyticsFilterData.formats, 'All Formats');
+        populateSelect('filterLanguage', analyticsFilterData.languages, 'All Languages');
+        reloadAnalyticsCascade();
     } catch (err) {
         console.error('[ANALYTICS] Failed to load filter options:', err);
     }
 }
 
-function populateSelect(elementId, items, defaultLabel) {
+function populateSelect(elementId, items, defaultLabel, emptyLabel) {
     const sel = document.getElementById(elementId);
     if (!sel) return;
-    sel.innerHTML = `<option value="">${defaultLabel}</option>`;
+    const previous = sel.value;
+    const label = (emptyLabel && items.length === 0) ? emptyLabel : defaultLabel;
+
+    sel.innerHTML = `<option value="">${label}</option>`;
     items.forEach(item => {
         const opt = document.createElement('option');
         opt.value = item.id || '';
         opt.textContent = item.name;
         sel.appendChild(opt);
     });
+
+    // A previously chosen value survives only while it is still in the list.
+    sel.value = items.some(i => String(i.id) === String(previous)) ? previous : '';
+}
+
+/**
+ * City -> Theatre -> Screen for the analytics bar. Selecting a city narrows the
+ * theatre list, selecting a theatre narrows the screens, and anything that is no
+ * longer reachable is dropped instead of being sent to the API.
+ */
+function reloadAnalyticsCascade() {
+    const cityEl = document.getElementById('filterCity');
+    const theatreEl = document.getElementById('filterTheatre');
+    const screenEl = document.getElementById('filterScreen');
+    const data = analyticsFilterData;
+
+    const cityId = cityEl ? cityEl.value : '';
+
+    if (theatreEl) {
+        const previousTheatre = theatreEl.value;
+        const theatres = data.theatres.filter(t => !cityId || String(t.parentId) === String(cityId));
+        populateSelect('filterTheatre', theatres, 'All Theatres', 'No theatres in this city');
+        if (!theatres.some(t => String(t.id) === String(previousTheatre))) {
+            theatreEl.value = '';
+        }
+    }
+
+    if (screenEl) {
+        const effectiveTheatre = theatreEl ? theatreEl.value : '';
+        const theatresInCity = cityId
+            ? new Set(data.theatres.filter(t => String(t.parentId) === String(cityId)).map(t => String(t.id)))
+            : null;
+
+        const screens = data.screens.filter(s => {
+            if (effectiveTheatre) return String(s.parentId) === String(effectiveTheatre);
+            if (theatresInCity) return theatresInCity.has(String(s.parentId));
+            return true;
+        });
+        populateSelect('filterScreen', screens, 'All Screens', 'No screens match');
+    }
+}
+
+/** Called by the City / Theatre selects in the markup. */
+function onAnalyticsFilterChange(changed) {
+    const theatreEl = document.getElementById('filterTheatre');
+    const screenEl = document.getElementById('filterScreen');
+    if (changed === 'city' && theatreEl) theatreEl.value = '';
+    if ((changed === 'city' || changed === 'theatre') && screenEl) screenEl.value = '';
+    reloadAnalyticsCascade();
+}
+
+/**
+ * Guards against the most common "unusual" input: a backwards date range, which
+ * would otherwise come back as an empty dashboard with no explanation.
+ */
+function validateAnalyticsDates() {
+    const from = document.getElementById('filterDateFrom')?.value || '';
+    const to = document.getElementById('filterDateTo')?.value || '';
+    const box = document.getElementById('analyticsFilterError');
+
+    const message = (from && to && from > to)
+        ? `Start date (${from}) cannot be after end date (${to}). Pick a valid range.`
+        : '';
+
+    if (box) {
+        box.textContent = message ? '⚠️ ' + message : '';
+        box.classList.toggle('hidden', !message);
+    }
+    return !message;
 }
 
 function collectFilters() {
@@ -125,6 +189,7 @@ function buildQueryString() {
 
 async function applyFilters() {
     collectFilters();
+    if (!validateAnalyticsDates()) return;
     const tasks = [
         ["Dashboard", loadDashboard()],
         ["RevenueTrend", loadRevenueTrend()],

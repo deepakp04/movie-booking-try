@@ -226,9 +226,17 @@
 
                     <!-- Listed Theatres -->
                     <div class="admin-card">
-                        <h3>Active Theatres</h3>
+                        <div style="display:flex; justify-content:space-between; align-items:flex-end; gap:12px; flex-wrap:wrap; margin-bottom:10px;">
+                            <h3 style="margin:0;">Active Theatres</h3>
+                            <div class="form-group" style="margin:0; flex:1; max-width:340px;">
+                                <label for="theatreSearchBox">Search</label>
+                                <input type="text" id="theatreSearchBox" placeholder="Theatre, city or address"
+                                       oninput="applyTheatreSearch()">
+                            </div>
+                        </div>
+                        <p class="subtitle" id="theatreCount" style="margin:0 0 10px 0;"></p>
                         <div id="theatresListContainer">
-                            <!-- Dynamic Accordion/Cards -->
+                            <!-- Filtered by the search box above -->
                         </div>
                     </div>
                 </div>
@@ -472,31 +480,23 @@
                     <p class="subtitle">Revenue, occupancy, and performance insights across all theatres.</p>
                 </div>
 
-                <!-- Filter Bar -->
+                <!-- Filter Bar: narrows left to right, City -> Theatre -> Screen -->
                 <div class="analytics-filters">
                     <div class="filter-group">
-                        <label>Date From</label>
-                        <input type="date" id="filterDateFrom">
-                    </div>
-                    <div class="filter-group">
-                        <label>Date To</label>
-                        <input type="date" id="filterDateTo">
-                    </div>
-                    <div class="filter-group">
-                        <label>Movie</label>
-                        <select id="filterMovie"></select>
+                        <label>City</label>
+                        <select id="filterCity" onchange="onAnalyticsFilterChange('city')"></select>
                     </div>
                     <div class="filter-group">
                         <label>Theatre</label>
-                        <select id="filterTheatre"></select>
+                        <select id="filterTheatre" onchange="onAnalyticsFilterChange('theatre')"></select>
                     </div>
                     <div class="filter-group">
                         <label>Screen</label>
                         <select id="filterScreen"></select>
                     </div>
                     <div class="filter-group">
-                        <label>City</label>
-                        <select id="filterCity"></select>
+                        <label>Movie</label>
+                        <select id="filterMovie"></select>
                     </div>
                     <div class="filter-group">
                         <label>Format</label>
@@ -507,10 +507,19 @@
                         <select id="filterLanguage"></select>
                     </div>
                     <div class="filter-group">
+                        <label>Date From</label>
+                        <input type="date" id="filterDateFrom">
+                    </div>
+                    <div class="filter-group">
+                        <label>Date To</label>
+                        <input type="date" id="filterDateTo">
+                    </div>
+                    <div class="filter-group">
                         <label>&nbsp;</label>
                         <button class="btn btn-primary btn-sm" onclick="applyFilters()">Apply Filters</button>
                     </div>
                 </div>
+                <div id="analyticsFilterError" class="alert alert-error hidden" style="margin-bottom:16px;"></div>
 
                 <!-- KPI Cards -->
                 <div class="kpi-grid">
@@ -778,30 +787,36 @@
                         <p class="subtitle">Filter and select a show to view booking details and ticket holders.</p>
                         <div class="analytics-filters" style="margin-bottom: 12px;">
                             <div class="filter-group">
-                                <label for="opsFilterDateFrom">Date From</label>
-                                <input type="date" id="opsFilterDateFrom" onchange="opsApplyShowFilters()">
-                            </div>
-                            <div class="filter-group">
-                                <label for="opsFilterDateTo">Date To</label>
-                                <input type="date" id="opsFilterDateTo" onchange="opsApplyShowFilters()">
+                                <label for="opsFilterCity">City</label>
+                                <select id="opsFilterCity" onchange="opsOnFilterChange('showReport', 'city')">
+                                    <option value="">All Cities</option>
+                                </select>
                             </div>
                             <div class="filter-group">
                                 <label for="opsFilterTheatre">Theatre</label>
-                                <select id="opsFilterTheatre" onchange="opsApplyShowFilters()">
+                                <select id="opsFilterTheatre" onchange="opsOnFilterChange('showReport', 'theatre')">
                                     <option value="">All Theatres</option>
                                 </select>
                             </div>
                             <div class="filter-group">
+                                <label for="opsFilterScreen">Screen</label>
+                                <select id="opsFilterScreen" onchange="opsOnFilterChange('showReport', 'screen')">
+                                    <option value="">All Screens</option>
+                                </select>
+                            </div>
+                            <div class="filter-group">
                                 <label for="opsFilterMovie">Movie</label>
-                                <select id="opsFilterMovie" onchange="opsApplyShowFilters()">
+                                <select id="opsFilterMovie" onchange="opsOnFilterChange('showReport', 'movie')">
                                     <option value="">All Movies</option>
                                 </select>
                             </div>
                             <div class="filter-group">
-                                <label for="opsFilterScreen">Screen</label>
-                                <select id="opsFilterScreen" onchange="opsApplyShowFilters()">
-                                    <option value="">All Screens</option>
-                                </select>
+                                <label for="opsFilterDateFrom">Date From</label>
+                                <input type="date" id="opsFilterDateFrom" onchange="opsOnFilterChange('showReport', 'date')">
+                            </div>
+                            <div class="filter-group">
+                                <label for="opsFilterDateTo">Date To</label>
+                                <input type="date" id="opsFilterDateTo" onchange="opsOnFilterChange('showReport', 'date')">
                             </div>
                             <button class="btn btn-secondary btn-sm" onclick="opsResetShowFilters()" style="align-self: flex-end;">Reset</button>
                         </div>
@@ -821,8 +836,14 @@
                 <div id="opsTheatreReport" class="ops-section hidden">
                     <div class="admin-card">
                         <h3>Theatre Report</h3>
-                        <p class="subtitle">Generate a theatre-level operational summary.</p>
+                        <p class="subtitle">Pick a city to narrow the theatre list, then generate the summary.</p>
                         <div class="form-row">
+                            <div class="form-group">
+                                <label for="opsTheatreReportCity">City</label>
+                                <select id="opsTheatreReportCity" onchange="opsNarrowTheatreReport()">
+                                    <option value="">All Cities</option>
+                                </select>
+                            </div>
                             <div class="form-group">
                                 <label for="opsTheatreSelect">Theatre</label>
                                 <select id="opsTheatreSelect" onchange="opsLoadTheatreReport()">
@@ -852,17 +873,45 @@
                         </div>
                         <div class="analytics-filters" style="margin-bottom: 12px;">
                             <div class="filter-group">
-                                <label for="opsTHFilterDateFrom">Date From</label>
-                                <input type="date" id="opsTHFilterDateFrom" onchange="opsApplyTHFilters()">
+                                <label for="opsTHFilterCity">City</label>
+                                <select id="opsTHFilterCity" onchange="opsOnFilterChange('ticketHolders', 'city')">
+                                    <option value="">All Cities</option>
+                                </select>
                             </div>
                             <div class="filter-group">
-                                <label for="opsTHFilterDateTo">Date To</label>
-                                <input type="date" id="opsTHFilterDateTo" onchange="opsApplyTHFilters()">
+                                <label for="opsTHFilterTheatre">Theatre</label>
+                                <select id="opsTHFilterTheatre" onchange="opsOnFilterChange('ticketHolders', 'theatre')">
+                                    <option value="">All Theatres</option>
+                                </select>
+                            </div>
+                            <div class="filter-group">
+                                <label for="opsTHFilterScreen">Screen</label>
+                                <select id="opsTHFilterScreen" onchange="opsOnFilterChange('ticketHolders', 'screen')">
+                                    <option value="">All Screens</option>
+                                </select>
                             </div>
                             <div class="filter-group">
                                 <label for="opsTHFilterMovie">Movie</label>
-                                <select id="opsTHFilterMovie" onchange="opsApplyTHFilters()">
+                                <select id="opsTHFilterMovie" onchange="opsOnFilterChange('ticketHolders', 'movie')">
                                     <option value="">All Movies</option>
+                                </select>
+                            </div>
+                            <div class="filter-group">
+                                <label for="opsTHFilterDateFrom">Date From</label>
+                                <input type="date" id="opsTHFilterDateFrom" onchange="opsOnFilterChange('ticketHolders', 'date')">
+                            </div>
+                            <div class="filter-group">
+                                <label for="opsTHFilterDateTo">Date To</label>
+                                <input type="date" id="opsTHFilterDateTo" onchange="opsOnFilterChange('ticketHolders', 'date')">
+                            </div>
+                            <div class="filter-group">
+                                <label for="opsTHFilterStatus">Status</label>
+                                <select id="opsTHFilterStatus" onchange="opsLoadTicketHolders()">
+                                    <option value="CONFIRMED" selected>Confirmed</option>
+                                    <option value="ALL">All</option>
+                                    <option value="CANCELLED">Cancelled</option>
+                                    <option value="EXPIRED">Expired</option>
+                                    <option value="PENDING_PAYMENT">Pending Payment</option>
                                 </select>
                             </div>
                             <button class="btn btn-secondary btn-sm" onclick="opsResetTHFilters()" style="align-self: flex-end;">Reset</button>

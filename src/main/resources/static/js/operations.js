@@ -125,28 +125,78 @@ async function opsApiCall(endpoint, method = 'GET', body = null) {
 
 async function opsLoadShowsDropdown() {
     try {
-        const scope = OPS_API_BASE === '/api/admin' ? 'all' : 'all';
-        const result = await opsApiCall(`/shows?scope=${scope}`);
+        const result = await opsApiCall('/shows?scope=all');
         if (!result) return;
 
-        const shows = result.data || [];
-        const selects = ['opsShowSelect', 'opsTHShowSelect'];
-        selects.forEach(id => {
-            const select = document.getElementById(id);
-            if (!select) return;
-            // Keep first option
-            while (select.options.length > 1) select.remove(1);
-            shows.forEach(show => {
-                const opt = document.createElement('option');
-                opt.value = show.id;
-                const date = show.startTime ? new Date(show.startTime).toLocaleDateString() : '';
-                opt.textContent = `${show.movieTitle || 'Movie'} — ${show.screenName || ''} — ${date}`;
-                select.appendChild(opt);
-            });
-        });
+        // Cached so the city -> theatre -> screen -> movie cascade can work out
+        // which movies actually run on a chosen screen without another call.
+        opsShowsCache = result.data || [];
+
+        opsPopulateShowSelect('opsShowSelect', opsShowsCache, false);
+        opsPopulateShowSelect('opsTHShowSelect', opsShowsCache, true);
     } catch (e) {
         console.error('Failed to load shows:', e);
     }
+}
+
+/**
+ * Build a show picker. Shows are listed chronologically and the label spells out
+ * movie + theatre + screen + exact time, which is what makes several different
+ * movies running on the same screen on the same day tellable apart. The ticket
+ * holder picker additionally groups the options by day.
+ */
+function opsPopulateShowSelect(selectId, shows, groupByDate) {
+    const select = document.getElementById(selectId);
+    if (!select) return;
+    select.innerHTML = '';
+
+    const placeholder = document.createElement('option');
+    placeholder.value = '';
+    placeholder.disabled = true;
+    placeholder.selected = true;
+    placeholder.textContent = shows.length
+        ? 'Select Show'
+        : 'No shows match the current filters';
+    select.appendChild(placeholder);
+
+    const sorted = shows.slice().sort((a, b) => new Date(a.startTime || 0) - new Date(b.startTime || 0));
+
+    const addOption = (parent, show) => {
+        const opt = document.createElement('option');
+        opt.value = show.id;
+        opt.textContent = opsShowLabel(show);
+        parent.appendChild(opt);
+    };
+
+    if (!groupByDate) {
+        sorted.forEach(show => addOption(select, show));
+        return;
+    }
+
+    let currentDay = null;
+    let group = null;
+    sorted.forEach(show => {
+        const day = show.startTime
+            ? new Date(show.startTime).toLocaleDateString([], { day: '2-digit', month: 'short', year: 'numeric' })
+            : 'Unknown date';
+        if (day !== currentDay) {
+            currentDay = day;
+            group = document.createElement('optgroup');
+            group.label = day;
+            select.appendChild(group);
+        }
+        addOption(group, show);
+    });
+}
+
+function opsShowLabel(show) {
+    const when = show.startTime
+        ? new Date(show.startTime).toLocaleString([], {
+            day: '2-digit', month: 'short', hour: 'numeric', minute: '2-digit'
+        })
+        : '';
+    return [show.movieTitle || 'Movie', show.theatreName, show.screenName, when]
+        .filter(Boolean).join(' • ');
 }
 
 async function opsLoadTheatresDropdown() {
@@ -155,7 +205,15 @@ async function opsLoadTheatresDropdown() {
         if (!result) return;
 
         const theatres = result.data || [];
-        const selects = ['opsTheatreSelect', 'incTheatre', 'opsUtilTheatre'];
+        // Used only if /filter-options fails, so the Theatre Report and theatre
+        // filter still have something to show.
+        opsTheatreFallback = theatres.map(t => ({
+            id: t.id, name: t.name, cityName: t.cityName, cityId: t.cityId
+        }));
+        // opsTheatreSelect is deliberately absent: it belongs to the Theatre Report
+        // and is narrowed by its city picker, so filling it with every theatre here
+        // would silently undo that narrowing depending on call order.
+        const selects = ['incTheatre', 'opsUtilTheatre'];
         selects.forEach(id => {
             const select = document.getElementById(id);
             if (!select) return;
@@ -167,6 +225,8 @@ async function opsLoadTheatresDropdown() {
                 select.appendChild(opt);
             });
         });
+        // Keep the Theatre Report picker in step with the fallback list.
+        opsPopulateTheatreReportCities();
     } catch (e) {
         console.error('Failed to load theatres:', e);
     }
@@ -174,7 +234,32 @@ async function opsLoadTheatresDropdown() {
 
 // ================= FILTER OPTIONS (Admin only) =================
 
-let opsFilterData = { theatres: [], movies: [], screens: [] };
+let opsFilterData = { theatres: [], movies: [], screens: [], cities: [] };
+
+// Show list shared by the pickers and the cascading filters.
+let opsShowsCache = [];
+
+// Theatre list from /theatres, used only when /filter-options is unavailable.
+let opsTheatreFallback = [];
+
+function opsTheatreList() {
+    const fromFilters = (opsFilterData && opsFilterData.theatres) || [];
+    return fromFilters.length ? fromFilters : opsTheatreFallback;
+}
+
+// Which <select> ids belong to each Operations filter group.
+const OPS_FILTER_GROUPS = {
+    showReport: {
+        city: 'opsFilterCity', theatre: 'opsFilterTheatre',
+        screen: 'opsFilterScreen', movie: 'opsFilterMovie',
+        dateFrom: 'opsFilterDateFrom', dateTo: 'opsFilterDateTo'
+    },
+    ticketHolders: {
+        city: 'opsTHFilterCity', theatre: 'opsTHFilterTheatre',
+        screen: 'opsTHFilterScreen', movie: 'opsTHFilterMovie',
+        dateFrom: 'opsTHFilterDateFrom', dateTo: 'opsTHFilterDateTo'
+    }
+};
 
 async function opsLoadFilterOptions() {
     try {
@@ -188,41 +273,149 @@ async function opsLoadFilterOptions() {
 }
 
 function populateFilterDropdowns() {
-    // Populate theatre filter
-    const theatreSelect = document.getElementById('opsFilterTheatre');
-    if (theatreSelect) {
-        while (theatreSelect.options.length > 1) theatreSelect.remove(1);
-        (opsFilterData.theatres || []).forEach(t => {
-            const opt = document.createElement('option');
-            opt.value = t.id;
-            opt.textContent = t.name;
-            theatreSelect.appendChild(opt);
-        });
-    }
-    // Populate movie filter
-    const movieSelect = document.getElementById('opsFilterMovie');
-    if (movieSelect) {
-        while (movieSelect.options.length > 1) movieSelect.remove(1);
-        (opsFilterData.movies || []).forEach(m => {
-            const opt = document.createElement('option');
-            opt.value = m.title;
-            opt.textContent = m.title;
-            movieSelect.appendChild(opt);
-        });
-    }
-    // Populate screen filter
-    const screenSelect = document.getElementById('opsFilterScreen');
-    if (screenSelect) {
-        while (screenSelect.options.length > 1) screenSelect.remove(1);
-        (opsFilterData.screens || []).forEach(s => {
-            const opt = document.createElement('option');
-            opt.value = s.name + '|' + s.theatreName;
-            opt.textContent = s.name + ' — ' + s.theatreName;
-            screenSelect.appendChild(opt);
-        });
-    }
+    // Every filter group is filled through the same city -> theatre -> screen
+    // -> movie cascade, so the Show Report and Ticket Holders sections can never
+    // disagree about what is selectable.
+    opsCascadeOpsFilters('showReport', 'init');
+    opsPopulateTHFilterDropdowns();
+    opsPopulateTheatreReportCities();
     // Also populate conflict check dropdowns
     populateConflictDropdowns();
+}
+
+/**
+ * Fill the Ticket Holder filter dropdowns (Theatre / Screen / Movie).
+ * Shared by admin (filter-options) and owner (derived from its own shows).
+ */
+/**
+ * Rebuild one <select> from a list, keeping the current choice only while it is
+ * still valid after narrowing and otherwise falling back to the placeholder.
+ */
+function opsFillSelect(selectId, items, valueFn, labelFn, placeholder) {
+    const select = document.getElementById(selectId);
+    if (!select) return;
+    const previous = select.value;
+
+    select.innerHTML = '';
+    const first = document.createElement('option');
+    first.value = '';
+    first.textContent = placeholder;
+    select.appendChild(first);
+
+    items.forEach(item => {
+        const opt = document.createElement('option');
+        opt.value = valueFn(item);
+        opt.textContent = labelFn(item);
+        select.appendChild(opt);
+    });
+
+    select.value = items.some(i => String(valueFn(i)) === String(previous)) ? previous : '';
+}
+
+/**
+ * Narrow one Operations filter group down the City -> Theatre -> Screen -> Movie
+ * chain. Changing a parent clears the children it invalidates, an empty child
+ * list says so instead of looking broken, and a selection that no longer exists
+ * is dropped rather than silently ignored.
+ */
+function opsCascadeOpsFilters(group, changed) {
+    const ids = OPS_FILTER_GROUPS[group];
+    if (!ids) return;
+
+    const data = opsFilterData || { theatres: [], screens: [], movies: [], cities: [] };
+    const theatres = opsTheatreList();
+    const cityEl = document.getElementById(ids.city);
+    const theatreEl = document.getElementById(ids.theatre);
+    const screenEl = document.getElementById(ids.screen);
+    const movieEl = document.getElementById(ids.movie);
+
+    if (changed === 'city' && theatreEl) theatreEl.value = '';
+    if ((changed === 'city' || changed === 'theatre') && screenEl) screenEl.value = '';
+    if ((changed === 'city' || changed === 'theatre' || changed === 'screen') && movieEl) movieEl.value = '';
+
+    const cityId = cityEl ? cityEl.value : '';
+
+    // City -> Theatre
+    if (theatreEl) {
+        const narrowedTheatres = theatres
+            .filter(t => !cityId || String(t.cityId) === String(cityId));
+        opsFillSelect(ids.theatre, narrowedTheatres, t => t.id, t => t.name,
+            cityId && narrowedTheatres.length === 0 ? 'No theatres in this city' : 'All Theatres');
+    }
+
+    const theatreId = theatreEl ? theatreEl.value : '';
+
+    // Theatre (or city) -> Screen
+    if (screenEl) {
+        const theatresInCity = cityId
+            ? new Set(theatres
+                .filter(t => String(t.cityId) === String(cityId))
+                .map(t => String(t.id)))
+            : null;
+        const screens = (data.screens || []).filter(s => {
+            if (theatreId) return String(s.theatreId) === String(theatreId);
+            if (theatresInCity) return theatresInCity.has(String(s.theatreId));
+            return true;
+        });
+        opsFillSelect(ids.screen, screens, s => s.id, s => s.name + ' — ' + s.theatreName,
+            screens.length === 0 ? 'No screens match' : 'All Screens');
+    }
+
+    const screenId = screenEl ? screenEl.value : '';
+
+    // Screen -> Movie: only movies actually scheduled on the chosen screen
+    if (movieEl) {
+        let movies = (data.movies || []).slice();
+        if (screenId) {
+            const onScreen = new Set((opsShowsCache || [])
+                .filter(s => String(s.screenId) === String(screenId))
+                .map(s => s.movieTitle));
+            const narrowed = movies.filter(m => onScreen.has(m.title));
+            if (narrowed.length > 0) movies = narrowed;
+        }
+        opsFillSelect(ids.movie, movies, m => m.title, m => m.title, 'All Movies');
+    }
+}
+
+/**
+ * Single onchange entry point for every Operations filter control: narrow the
+ * chain first, then refresh the show list, so a stale child or a show list that
+ * no longer matches the filters can never be left on screen.
+ */
+function opsOnFilterChange(group, changed) {
+    opsCascadeOpsFilters(group, changed);
+    if (group === 'showReport') {
+        opsApplyShowFilters();
+    } else {
+        opsApplyTHFilters();
+    }
+}
+
+/**
+ * Fill the Ticket Holder filter group. Kept as a named function because it is
+ * also the entry point for the owner portal, which has no /filter-options call.
+ */
+function opsPopulateTHFilterDropdowns() {
+    opsCascadeOpsFilters('ticketHolders', 'init');
+}
+
+function opsPopulateTheatreReportCities() {
+    if (!document.getElementById('opsTheatreReportCity')) return;
+    opsFillSelect('opsTheatreReportCity', opsFilterData.cities || [],
+        c => c.id, c => c.name, 'All Cities');
+    opsNarrowTheatreReport();
+}
+
+/** City -> Theatre for the Theatre Report. */
+function opsNarrowTheatreReport() {
+    const cityEl = document.getElementById('opsTheatreReportCity');
+    if (!cityEl) return;
+    const cityId = cityEl.value;
+    const theatres = opsTheatreList()
+        .filter(t => !cityId || String(t.cityId) === String(cityId));
+    opsFillSelect('opsTheatreSelect', theatres, t => t.id,
+        t => t.cityName ? `${t.name} (${t.cityName})` : t.name,
+        theatres.length === 0 ? 'No theatres in this city' : 'Select Theatre');
 }
 
 function populateConflictDropdowns() {
@@ -263,106 +456,158 @@ async function opsLoadOwnerFilterData() {
         shows.forEach(s => {
             if (s.screenName && s.theatreName) {
                 const key = s.screenName + '@' + s.theatreName;
-                if (!screenMap[key]) screenMap[key] = { id: s.screenName, name: s.screenName, theatreName: s.theatreName };
+                if (!screenMap[key]) {
+                    screenMap[key] = {
+                        id: s.screenId,
+                        name: s.screenName,
+                        theatreName: s.theatreName,
+                        theatreId: s.theatreId,
+                        cityId: s.cityId
+                    };
+                }
             }
             if (s.movieTitle) {
-                if (!movieMap[s.movieTitle]) movieMap[s.movieTitle] = { id: s.movieTitle, title: s.movieTitle };
+                if (!movieMap[s.movieTitle]) movieMap[s.movieTitle] = { id: s.movieId, title: s.movieTitle };
             }
         });
+        // Kept so the screen -> movie narrowing has a show list to work from.
+        opsShowsCache = shows;
+
         opsFilterData = {
             theatres: [],
+            cities: [],
             screens: Object.values(screenMap),
             movies: Object.values(movieMap)
         };
+        // Same cascade entry points the admin portal uses, so the owner's Show
+        // Report and Ticket Holders filters are populated identically (narrowed
+        // to Screen -> Movie, since an owner only ever has one theatre).
+        opsCascadeOpsFilters('showReport', 'init');
+        opsPopulateTHFilterDropdowns();
+        opsPopulateTheatreReportCities();
         populateConflictDropdowns();
     } catch (e) {
         console.error('Failed to load owner filter data:', e);
     }
 }
 
-function opsApplyShowFilters() {
-    const dateFrom = document.getElementById('opsFilterDateFrom')?.value || '';
-    const dateTo = document.getElementById('opsFilterDateTo')?.value || '';
-    const theatreId = document.getElementById('opsFilterTheatre')?.value || '';
-    const movieTitle = document.getElementById('opsFilterMovie')?.value || '';
-    const screenVal = document.getElementById('opsFilterScreen')?.value || '';
+/**
+ * Read one filter group's selections and return the shows that match.
+ * Filtering happens client-side because the (small) show list has to be fetched
+ * anyway, and it keeps city/theatre/screen/movie narrowing in a single place.
+ */
+async function opsFilteredShows(group) {
+    const ids = OPS_FILTER_GROUPS[group];
+    if (!ids) return [];
+    const val = id => (id ? (document.getElementById(id)?.value || '') : '');
 
-    let url = '/shows?scope=all';
-    if (dateFrom) url += `&dateFrom=${dateFrom}`;
-    if (dateTo) url += `&dateTo=${dateTo}`;
-    if (theatreId) url += `&theatreId=${theatreId}`;
+    const dateFrom = val(ids.dateFrom);
+    const dateTo = val(ids.dateTo);
+    const cityId = val(ids.city);
+    const theatreId = val(ids.theatre);
+    const screenId = val(ids.screen);
+    const movieTitle = val(ids.movie);
 
-    opsApiCall(url).then(result => {
-        if (!result) return;
-        let shows = result.data || [];
-        // Client-side filter for movie and screen (since we don't have server endpoints for these)
-        if (movieTitle) shows = shows.filter(s => s.movieTitle === movieTitle);
-        if (screenVal) {
-            const [sName, tName] = screenVal.split('|');
-            shows = shows.filter(s => s.screenName === sName && s.theatreName === tName);
-        }
-        populateShowsSelect(shows);
-    }).catch(e => console.error('Failed to filter shows:', e));
+    // An impossible range is called out rather than quietly returning nothing.
+    if (dateFrom && dateTo && dateFrom > dateTo) {
+        opsShowFilterWarning(group,
+            `Start date (${dateFrom}) cannot be after end date (${dateTo}). Pick a valid range.`);
+        return [];
+    }
+    opsShowFilterWarning(group, '');
+
+    const result = await opsApiCall('/shows?scope=all');
+    if (!result) return [];
+    opsShowsCache = result.data || [];
+
+    return opsShowsCache
+        .filter(s => !cityId || String(s.cityId) === String(cityId))
+        .filter(s => !theatreId || String(s.theatreId) === String(theatreId))
+        .filter(s => !screenId || String(s.screenId) === String(screenId))
+        .filter(s => !movieTitle || s.movieTitle === movieTitle)
+        .filter(s => !dateFrom || (s.startTime && s.startTime.slice(0, 10) >= dateFrom))
+        .filter(s => !dateTo || (s.startTime && s.startTime.slice(0, 10) <= dateTo));
+}
+
+/**
+ * Inline warning placed directly under a filter row. Created on demand so the
+ * markup does not need an error slot in every section.
+ */
+function opsShowFilterWarning(group, message) {
+    const ids = OPS_FILTER_GROUPS[group];
+    if (!ids) return;
+    const anchor = document.getElementById(ids.screen) || document.getElementById(ids.movie);
+    if (!anchor) return;
+    const row = anchor.closest('.analytics-filters');
+    if (!row || !row.parentElement) return;
+
+    let box = row.parentElement.querySelector(`[data-ops-warning="${group}"]`);
+    if (!box) {
+        box = document.createElement('div');
+        box.className = 'alert alert-error hidden';
+        box.setAttribute('data-ops-warning', group);
+        box.style.marginBottom = '12px';
+        row.insertAdjacentElement('afterend', box);
+    }
+    if (message) {
+        box.textContent = '⚠️ ' + message;
+        box.classList.remove('hidden');
+    } else {
+        box.textContent = '';
+        box.classList.add('hidden');
+    }
+}
+
+async function opsApplyShowFilters() {
+    try {
+        const shows = await opsFilteredShows('showReport');
+        opsPopulateShowSelect('opsShowSelect', shows, false);
+    } catch (e) {
+        console.error('Failed to filter shows:', e);
+    }
+}
+
+async function opsApplyTHFilters() {
+    try {
+        const shows = await opsFilteredShows('ticketHolders');
+        opsPopulateShowSelect('opsTHShowSelect', shows, true);
+    } catch (e) {
+        console.error('Failed to filter TH shows:', e);
+    }
 }
 
 function opsResetShowFilters() {
-    const ids = ['opsFilterDateFrom', 'opsFilterDateTo', 'opsFilterTheatre', 'opsFilterMovie', 'opsFilterScreen'];
-    ids.forEach(id => {
+    ['opsFilterCity', 'opsFilterTheatre', 'opsFilterScreen', 'opsFilterMovie',
+     'opsFilterDateFrom', 'opsFilterDateTo'].forEach(id => {
         const el = document.getElementById(id);
         if (el) el.value = '';
     });
+    opsShowFilterWarning('showReport', '');
+    opsCascadeOpsFilters('showReport', 'init');
     opsLoadShowsDropdown();
-}
-
-function opsApplyTHFilters() {
-    const dateFrom = document.getElementById('opsTHFilterDateFrom')?.value || '';
-    const dateTo = document.getElementById('opsTHFilterDateTo')?.value || '';
-    const movieTitle = document.getElementById('opsTHFilterMovie')?.value || '';
-
-    let url = '/shows?scope=all';
-    if (dateFrom) url += `&dateFrom=${dateFrom}`;
-    if (dateTo) url += `&dateTo=${dateTo}`;
-
-    opsApiCall(url).then(result => {
-        if (!result) return;
-        let shows = result.data || [];
-        if (movieTitle) shows = shows.filter(s => s.movieTitle === movieTitle);
-        // Populate TH show select
-        const select = document.getElementById('opsTHShowSelect');
-        if (!select) return;
-        while (select.options.length > 1) select.remove(1);
-        shows.forEach(show => {
-            const opt = document.createElement('option');
-            opt.value = show.id;
-            const date = show.startTime ? new Date(show.startTime).toLocaleDateString() : '';
-            opt.textContent = `${show.movieTitle || 'Movie'} — ${show.screenName || ''} — ${date}`;
-            select.appendChild(opt);
-        });
-    }).catch(e => console.error('Failed to filter TH shows:', e));
 }
 
 function opsResetTHFilters() {
-    ['opsTHFilterDateFrom', 'opsTHFilterDateTo', 'opsTHFilterMovie'].forEach(id => {
+    ['opsTHFilterCity', 'opsTHFilterTheatre', 'opsTHFilterScreen', 'opsTHFilterMovie',
+     'opsTHFilterDateFrom', 'opsTHFilterDateTo'].forEach(id => {
         const el = document.getElementById(id);
         if (el) el.value = '';
     });
-    opsLoadShowsDropdown();
-}
+    const status = document.getElementById('opsTHFilterStatus');
+    if (status) status.value = 'CONFIRMED';
 
-function populateShowsSelect(shows) {
-    const selects = ['opsShowSelect', 'opsTHShowSelect'];
-    selects.forEach(id => {
-        const select = document.getElementById(id);
-        if (!select) return;
-        while (select.options.length > 1) select.remove(1);
-        shows.forEach(show => {
-            const opt = document.createElement('option');
-            opt.value = show.id;
-            const date = show.startTime ? new Date(show.startTime).toLocaleDateString() : '';
-            opt.textContent = `${show.movieTitle || 'Movie'} — ${show.screenName || ''} — ${date}`;
-            select.appendChild(opt);
-        });
-    });
+    opsShowFilterWarning('ticketHolders', '');
+    opsCascadeOpsFilters('ticketHolders', 'init');
+
+    // Drop the loaded rows and clear the result area
+    opsTHHolders = [];
+    const container = document.getElementById('opsTicketHoldersResult');
+    if (container) {
+        container.classList.add('hidden');
+        container.innerHTML = '';
+    }
+
+    opsLoadShowsDropdown();
 }
 
 // ================= SHOW REPORT =================
@@ -406,6 +651,7 @@ async function opsLoadShowReport() {
                     <table class="data-table">
                         <thead>
                             <tr>
+                                <th>#</th>
                                 <th>Seat</th>
                                 <th>Attendee Name</th>
                                 <th>Phone</th>
@@ -419,8 +665,9 @@ async function opsLoadShowReport() {
                             </tr>
                         </thead>
                         <tbody>
-                            ${r.ticketHolders.map(h => `
+                            ${r.ticketHolders.map((h, idx) => `
                                 <tr>
+                                    <td>${idx + 1}</td>
                                     <td><strong>${h.seatCode}</strong></td>
                                     <td>${h.attendeeName || h.customerName || ''}</td>
                                     <td>${h.attendeePhone || h.customerPhone || ''}</td>
@@ -533,68 +780,160 @@ async function opsLoadTheatreReport() {
 
 // ================= TICKET HOLDERS =================
 
+let opsTHHolders = [];   // holders for the show currently selected in the dropdown
+
 async function opsLoadTicketHolders() {
     const showId = document.getElementById('opsTHShowSelect')?.value;
     if (!showId) return;
 
+    const status = document.getElementById('opsTHFilterStatus')?.value || 'CONFIRMED';
+
     const container = document.getElementById('opsTicketHoldersResult');
     container.classList.remove('hidden');
-    container.innerHTML = '<p style="color: var(--text-muted);">Loading...</p>';
+    container.innerHTML = `
+        <div class="analytics-filters" style="margin-bottom: 12px;">
+            <div class="filter-group">
+                <label for="opsTHSearchBox">Search</label>
+                <input type="text" id="opsTHSearchBox" placeholder="Name, phone, seat or booking ID" oninput="opsRenderTHRows()" style="min-width: 220px;">
+            </div>
+            <div class="filter-group">
+                <label for="opsTHFilterBookedFor">Booked For</label>
+                <select id="opsTHFilterBookedFor" onchange="opsRenderTHRows()">
+                    <option value="">All</option>
+                    <option value="SELF">Self</option>
+                    <option value="OTHERS">Others</option>
+                </select>
+            </div>
+            <div class="filter-group">
+                <label for="opsTHFilterTier">Tier</label>
+                <select id="opsTHFilterTier" onchange="opsRenderTHRows()">
+                    <option value="">All Tiers</option>
+                </select>
+            </div>
+            <button class="btn btn-primary btn-sm" onclick="opsGenerateReport('TICKET_HOLDER_REPORT', ${showId})" style="align-self: flex-end;">Generate Report</button>
+        </div>
+        <div id="opsTHTableArea"><p style="color: var(--text-muted);">Loading...</p></div>
+    `;
 
     try {
-        const result = await opsApiCall(`/reports/ticket-holders?showId=${showId}`);
+        const result = await opsApiCall(`/reports/ticket-holders?showId=${showId}&status=${status}`);
         if (!result) return;
 
-        const holders = result.data || [];
-        container.innerHTML = `
-            <div style="display: flex; gap: 8px; margin-bottom: 16px;">
-                <button class="btn btn-primary btn-sm" onclick="opsGenerateReport('TICKET_HOLDER_REPORT', ${showId})">Generate Report</button>
-            </div>
-            ${holders.length > 0 ? `
-                <p style="color: var(--text-muted); font-size: 13px; margin-bottom: 8px;">${holders.length} confirmed ticket holder(s)</p>
-                <div class="table-wrapper">
-                    <table class="data-table">
-                        <thead>
-                            <tr>
-                                <th>Seat</th>
-                                <th>Attendee Name</th>
-                                <th>Phone</th>
-                                <th>DOB</th>
-                                <th>Booked For</th>
-                                <th>Booker</th>
-                                <th>Booker Email</th>
-                                <th>Tier</th>
-                                <th>Price</th>
-                                <th>Booking Time</th>
-                                <th>Status</th>
-                                <th>Payment</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            ${holders.map(h => `
-                                <tr>
-                                    <td><strong>${h.seatCode}</strong></td>
-                                    <td>${h.attendeeName || h.customerName || ''}</td>
-                                    <td>${h.attendeePhone || h.customerPhone || ''}</td>
-                                    <td>${h.attendeeDob || '—'}</td>
-                                    <td>${h.bookingForSelf === true ? 'Self' : h.bookingForSelf === false ? 'Others' : '—'}</td>
-                                    <td>${h.customerName || ''}</td>
-                                    <td>${h.customerEmail || ''}</td>
-                                    <td>${h.seatTier || 'Standard'}</td>
-                                    <td>₹${Number(h.ticketPrice).toLocaleString()}</td>
-                                    <td>${h.bookingTime ? new Date(h.bookingTime).toLocaleString() : ''}</td>
-                                    <td><span class="badge badge-${h.bookingStatus === 'CONFIRMED' ? 'success' : 'warning'}">${h.bookingStatus}</span></td>
-                                    <td>${h.paymentStatus || 'N/A'}</td>
-                                </tr>
-                            `).join('')}
-                        </tbody>
-                    </table>
-                </div>
-            ` : '<p style="color: var(--text-muted);">No confirmed ticket holders for this show.</p>'}
-        `;
+        // Seat order reads naturally (A1, A2, B1 ...) and keeps the serial numbers stable
+        opsTHHolders = (result.data || []).slice().sort(opsSeatCodeCompare);
+
+        // Tier choices come from the tiers this show actually has
+        const tierSelect = document.getElementById('opsTHFilterTier');
+        if (tierSelect) {
+            const tiers = [...new Set(opsTHHolders.map(h => h.seatTier || 'Standard'))].sort();
+            tiers.forEach(t => {
+                const opt = document.createElement('option');
+                opt.value = t;
+                opt.textContent = t;
+                tierSelect.appendChild(opt);
+            });
+        }
+
+        opsRenderTHRows();
     } catch (e) {
-        container.innerHTML = `<p style="color: #ff5252;">Error: ${e.message}</p>`;
+        const area = document.getElementById('opsTHTableArea');
+        if (area) area.innerHTML = `<p style="color: #ff5252;">Error: ${e.message}</p>`;
     }
+}
+
+/** Natural seat ordering: letters first, then the numeric part. */
+function opsSeatCodeCompare(a, b) {
+    const sa = (a.seatCode || '').toUpperCase();
+    const sb = (b.seatCode || '').toUpperCase();
+    const ma = sa.match(/^([A-Z]*)(\d*)/);
+    const mb = sb.match(/^([A-Z]*)(\d*)/);
+    const la = ma ? ma[1] : '';
+    const lb = mb ? mb[1] : '';
+    if (la !== lb) return la < lb ? -1 : 1;
+    const na = ma && ma[2] ? parseInt(ma[2], 10) : 0;
+    const nb = mb && mb[2] ? parseInt(mb[2], 10) : 0;
+    if (na !== nb) return na - nb;
+    return sa < sb ? -1 : sa > sb ? 1 : 0;
+}
+
+/** Apply the search box / Booked For / Tier filters and render the holders table. */
+function opsRenderTHRows() {
+    const area = document.getElementById('opsTHTableArea');
+    if (!area) return;
+
+    const container = document.getElementById('opsTicketHoldersResult');
+    if (container) container.classList.remove('hidden');
+
+    const query = (document.getElementById('opsTHSearchBox')?.value || '').trim().toLowerCase();
+    const bookedFor = document.getElementById('opsTHFilterBookedFor')?.value || '';
+    const tier = document.getElementById('opsTHFilterTier')?.value || '';
+
+    let rows = opsTHHolders;
+
+    if (bookedFor === 'SELF') rows = rows.filter(h => h.bookingForSelf === true);
+    else if (bookedFor === 'OTHERS') rows = rows.filter(h => h.bookingForSelf === false);
+
+    if (tier) rows = rows.filter(h => (h.seatTier || 'Standard') === tier);
+
+    if (query) {
+        rows = rows.filter(h => [
+            h.attendeeName, h.customerName, h.attendeePhone, h.customerPhone,
+            h.customerEmail, h.seatCode, h.bookingId, h.transactionId, h.paymentTransactionId
+        ].filter(Boolean).join(' ').toLowerCase().includes(query));
+    }
+
+    if (opsTHHolders.length === 0) {
+        area.innerHTML = '<p style="color: var(--text-muted);">No ticket holders found for the selected show and status.</p>';
+        return;
+    }
+    if (rows.length === 0) {
+        area.innerHTML = `<p style="color: var(--text-muted);">No ticket holders match the current filters (${opsTHHolders.length} loaded).</p>`;
+        return;
+    }
+
+    area.innerHTML = `
+        <p style="color: var(--text-muted); font-size: 13px; margin-bottom: 8px;">Showing ${rows.length} of ${opsTHHolders.length} ticket holder(s)</p>
+        <div class="table-wrapper">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>Seat</th>
+                        <th>Attendee Name</th>
+                        <th>Phone</th>
+                        <th>DOB</th>
+                        <th>Booked For</th>
+                        <th>Booker</th>
+                        <th>Booker Email</th>
+                        <th>Tier</th>
+                        <th>Price</th>
+                        <th>Booking Time</th>
+                        <th>Status</th>
+                        <th>Payment</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${rows.map((h, idx) => `
+                        <tr>
+                            <td>${idx + 1}</td>
+                            <td><strong>${h.seatCode}</strong></td>
+                            <td>${h.attendeeName || h.customerName || ''}</td>
+                            <td>${h.attendeePhone || h.customerPhone || ''}</td>
+                            <td>${h.attendeeDob || '—'}</td>
+                            <td>${h.bookingForSelf === true ? 'Self' : h.bookingForSelf === false ? 'Others' : '—'}</td>
+                            <td>${h.customerName || ''}</td>
+                            <td>${h.customerEmail || ''}</td>
+                            <td>${h.seatTier || 'Standard'}</td>
+                            <td>₹${Number(h.ticketPrice).toLocaleString()}</td>
+                            <td>${h.bookingTime ? new Date(h.bookingTime).toLocaleString() : ''}</td>
+                            <td><span class="badge badge-${h.bookingStatus === 'CONFIRMED' ? 'success' : 'warning'}">${h.bookingStatus}</span></td>
+                            <td>${h.paymentStatus || 'N/A'}</td>
+                        </tr>
+                    `).join('')}
+                </tbody>
+            </table>
+        </div>
+    `;
 }
 
 // ================= INCIDENTS =================

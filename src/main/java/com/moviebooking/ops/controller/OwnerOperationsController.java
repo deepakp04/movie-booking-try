@@ -91,7 +91,8 @@ public class OwnerOperationsController {
         Theatre theatre = currentOwnersTheatre();
         OpsDTOs.TheatreDropdownItem item = new OpsDTOs.TheatreDropdownItem(
                 theatre.getId(), theatre.getName(),
-                theatre.getCity() != null ? theatre.getCity().getName() : ""
+                theatre.getCity() != null ? theatre.getCity().getName() : "",
+                theatre.getCity() != null ? theatre.getCity().getId() : null
         );
         return ApiResponse.success("Theatre loaded successfully", item);
     }
@@ -134,10 +135,11 @@ public class OwnerOperationsController {
     @GetMapping("/reports/ticket-holders")
     public ApiResponse<List<TicketHolderResponse>> getTicketHolders(
             @RequestParam Long showId,
+            @RequestParam(required = false, defaultValue = "CONFIRMED") String status,
             HttpServletRequest request) {
 
         Theatre theatre = currentOwnersTheatre();
-        List<TicketHolderResponse> holders = operationsService.getTicketHolders(showId, theatre.getId());
+        List<TicketHolderResponse> holders = operationsService.getTicketHolders(showId, theatre.getId(), status);
 
         auditLog(AuditAction.VIEW_TICKET_HOLDERS, "SHOW", showId, theatre.getId(), showId,
                 "Viewed " + holders.size() + " ticket holders for show #" + showId, request);

@@ -91,23 +91,42 @@ public class AdminOperationsController {
         List<OpsDTOs.TheatreDropdownItem> theatres = operationsService.getAllTheatres();
         List<OpsDTOs.ShowDropdownItem> allShows = operationsService.getAllShows();
 
-        // Extract unique movies from shows
+        // Cities that actually have at least one theatre
+        List<OpsDTOs.CityDropdownItem> cities = theatres.stream()
+                .filter(t -> t.cityId() != null)
+                .collect(java.util.stream.Collectors.toMap(
+                        OpsDTOs.TheatreDropdownItem::cityId,
+                        t -> new OpsDTOs.CityDropdownItem(t.cityId(), t.cityName()),
+                        (a, b) -> a))
+                .values().stream()
+                .sorted(java.util.Comparator.comparing(OpsDTOs.CityDropdownItem::name,
+                        java.util.Comparator.nullsLast(String::compareToIgnoreCase)))
+                .toList();
+
+        // Extract unique movies from shows, keeping the real movie id
         List<OpsDTOs.MovieFilterItem> movies = allShows.stream()
                 .collect(java.util.stream.Collectors.toMap(
                         OpsDTOs.ShowDropdownItem::movieTitle,
-                        s -> new OpsDTOs.MovieFilterItem(null, s.movieTitle()),
+                        s -> new OpsDTOs.MovieFilterItem(s.movieId(), s.movieTitle()),
                         (a, b) -> a))
-                .values().stream().toList();
+                .values().stream()
+                .sorted(java.util.Comparator.comparing(OpsDTOs.MovieFilterItem::title,
+                        java.util.Comparator.nullsLast(String::compareToIgnoreCase)))
+                .toList();
 
-        // Extract unique screens from shows
+        // Extract unique screens from shows, keeping the theatre + city they belong to
+        // so the UI can narrow city -> theatre -> screen without extra round trips.
         List<OpsDTOs.ScreenFilterItem> screens = allShows.stream()
                 .collect(java.util.stream.Collectors.toMap(
                         s -> s.screenName() + "@" + s.theatreName(),
-                        s -> new OpsDTOs.ScreenFilterItem(null, s.screenName(), s.theatreName()),
+                        s -> new OpsDTOs.ScreenFilterItem(s.screenId(), s.screenName(), s.theatreName(),
+                                s.theatreId(), s.cityId()),
                         (a, b) -> a))
-                .values().stream().toList();
+                .values().stream()
+                .toList();
 
-        return ApiResponse.success("Filter options loaded", new OpsDTOs.FilterOptionsResponse(theatres, movies, screens));
+        return ApiResponse.success("Filter options loaded",
+                new OpsDTOs.FilterOptionsResponse(theatres, movies, screens, cities));
     }
 
     // ================= SHOW REPORTS =================
@@ -147,9 +166,10 @@ public class AdminOperationsController {
     @GetMapping("/reports/ticket-holders")
     public ApiResponse<List<TicketHolderResponse>> getTicketHolders(
             @RequestParam Long showId,
+            @RequestParam(required = false, defaultValue = "CONFIRMED") String status,
             HttpServletRequest request) {
 
-        List<TicketHolderResponse> holders = operationsService.getTicketHolders(showId, null);
+        List<TicketHolderResponse> holders = operationsService.getTicketHolders(showId, null, status);
 
         auditLog(AuditAction.VIEW_TICKET_HOLDERS, "SHOW", showId, null, showId,
                 "Viewed " + holders.size() + " ticket holders for show #" + showId, request);

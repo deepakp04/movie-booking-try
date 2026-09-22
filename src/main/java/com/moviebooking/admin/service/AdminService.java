@@ -57,6 +57,7 @@ import com.moviebooking.catalog.repository.TheatreRepository;
 import com.moviebooking.catalog.service.ScreenManagementService;
 import com.moviebooking.catalog.service.SeatConfigService;
 import com.moviebooking.catalog.service.ShowPricingService;
+import com.moviebooking.catalog.service.ShowScheduleValidator;
 import com.moviebooking.common.constants.Role;
 import com.moviebooking.common.constants.UserStatus;
 import com.moviebooking.common.exception.BusinessException;
@@ -79,6 +80,7 @@ public class AdminService {
     private final ScreenSeatRepository screenSeatRepository;
     private final com.moviebooking.booking.repository.ShowSeatRepository showSeatRepository;
     private final com.moviebooking.booking.service.BookingService bookingService;
+    private final ShowScheduleValidator showScheduleValidator;
 
     public AdminService(CityRepository cityRepository,
                         MovieRepository movieRepository,
@@ -92,7 +94,8 @@ public class AdminService {
                         ShowPricingService showPricing,
                         ScreenSeatRepository screenSeatRepository,
                         com.moviebooking.booking.repository.ShowSeatRepository showSeatRepository,
-                        com.moviebooking.booking.service.BookingService bookingService) {
+                        com.moviebooking.booking.service.BookingService bookingService,
+                        ShowScheduleValidator showScheduleValidator) {
         this.cityRepository = cityRepository;
         this.movieRepository = movieRepository;
         this.theatreRepository = theatreRepository;
@@ -106,6 +109,7 @@ public class AdminService {
         this.screenSeatRepository = screenSeatRepository;
         this.showSeatRepository = showSeatRepository;
         this.bookingService = bookingService;
+        this.showScheduleValidator = showScheduleValidator;
     }
 
     // --- CITIES ---
@@ -421,20 +425,34 @@ public class AdminService {
 
     // --- SHOWS ---
     public ShowResponse scheduleShow(ShowRequest req) {
-        Screen screen = screenRepository.findByIdAndIsDeletedFalse(req.screenId())
-                .orElseThrow(() -> new ResourceNotFoundException("Screen not found with ID: " + req.screenId()));
+        // Every input rule (past dates, missing seat layout, zero prices,
+        // duplicate/unknown reserved seats, double-booking a screen) lives in one
+        // shared validator so the owner portal enforces exactly the same rules
+        // and the API still rejects bad input if the browser is bypassed.
+        ShowScheduleValidator.ValidatedSchedule validated = showScheduleValidator.validate(
+                req.screenId(),
+                req.movieId(),
+                req.startTime(),
+                req.language(),
+                req.format(),
+                req.hasCaptions(),
+                req.basePrice(),
+                req.tierPrices() != null
+                        ? req.tierPrices().stream().map(TierPriceRequest::price).toList()
+                        : null,
+                req.reservedSeatCodes());
 
-        Movie movie = movieRepository.findByIdAndIsDeletedFalse(req.movieId())
-                .orElseThrow(() -> new ResourceNotFoundException("Movie not found with ID: " + req.movieId()));
+        Screen screen = validated.screen();
+        Movie movie = validated.movie();
 
         Show show = new Show();
         show.setScreen(screen);
         show.setMovie(movie);
-        show.setStartTime(req.startTime());
-        show.setLanguage(req.language());
-        show.setFormat(req.format());
-        show.setHasCaptions(req.hasCaptions() != null ? req.hasCaptions() : false);
-        show.setBasePrice(req.basePrice());
+        show.setStartTime(validated.startTime());
+        show.setLanguage(validated.language());
+        show.setFormat(validated.format());
+        show.setHasCaptions(validated.hasCaptions());
+        show.setBasePrice(validated.basePrice());
 
         // Show.basePrice is NOT NULL and acts as the fallback for any seat whose
         // tier has no explicit price, so derive it from the cheapest tier rather
@@ -449,8 +467,8 @@ public class AdminService {
 
         // Reserve seats at scheduling time if requested (e.g. house seats,
         // complimentary blocks). These seats are marked BOOKED immediately.
-        if (req.reservedSeatCodes() != null && !req.reservedSeatCodes().isEmpty()) {
-            reserveSeatsAtScheduling(saved, req.reservedSeatCodes());
+        if (!validated.reservedSeatCodes().isEmpty()) {
+            reserveSeatsAtScheduling(saved, validated.reservedSeatCodes());
         }
 
         return mapToShowResponse(saved);

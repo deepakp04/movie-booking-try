@@ -193,49 +193,89 @@ async function loadMovieOptions() {
 }
 
 // --- SHOWS ---
+// Last response, so the search box can filter without hitting the API on every
+// keystroke.
+let ownerShowsCache = [];
+
+/** Called by the search box. */
+function applyOwnerShowSearch() {
+    renderMyShows(document.getElementById('showScopeSelect')?.value || 'upcoming');
+}
+
 async function loadMyShows() {
     try {
         const scopeEl = document.getElementById('showScopeSelect');
         const scope = scopeEl ? scopeEl.value : 'upcoming';
         const res = await ownerApiCall(`/shows?scope=${scope}`);
         if (!res) return;
-        const tbody = document.getElementById('showsTableBody');
-        tbody.innerHTML = '';
-        
-        const now = new Date();
-
-        res.data.forEach(s => {
-            const showDateTime = s.startTime ? new Date(s.startTime) : null;
-            if (!showDateTime) return;
-            
-            // Skip past shows for upcoming scope - they should only appear in "past" scope
-            if (scope === 'upcoming' && showDateTime <= now) {
-                return;
-            }
-            
-            // Skip future shows for past scope
-            if (scope === 'past' && showDateTime > now) {
-                return;
-            }
-
-            const start = showDateTime.toLocaleString();
-            const isPast = showDateTime <= now;
-            
-            tbody.innerHTML += `
-                <tr>
-                    <td>${s.movieTitle || ''}</td>
-                    <td>${s.screenName || ''}</td>
-                    <td>${start}</td>
-                    <td>${s.format || ''}</td>
-                    <td>₹${s.basePrice}</td>
-                    <td>
-                        ${isPast ? '<span style="color: var(--text-muted);">Completed</span>' 
-                                 : `<button class="btn-danger-sm" onclick="cancelShow(${s.id})">Cancel</button>`}
-                    </td>
-                </tr>
-            `;
-        });
+        ownerShowsCache = res.data || [];
+        renderMyShows(scope);
     } catch (_) {}
+}
+
+function renderMyShows(scope) {
+    const tbody = document.getElementById('showsTableBody');
+    if (!tbody) return;
+    tbody.innerHTML = '';
+
+    const now = new Date();
+    const term = (document.getElementById('ownerShowSearch')?.value || '').trim().toLowerCase();
+    let shown = 0;
+
+    ownerShowsCache.forEach(s => {
+        const showDateTime = s.startTime ? new Date(s.startTime) : null;
+        if (!showDateTime) return;
+
+        // Skip past shows for upcoming scope - they should only appear in "past" scope
+        if (scope === 'upcoming' && showDateTime <= now) {
+            return;
+        }
+
+        // Skip future shows for past scope
+        if (scope === 'past' && showDateTime > now) {
+            return;
+        }
+
+        // Free-text search across the columns the owner actually sees, so a long
+        // schedule stays workable without scrolling every row.
+        if (term) {
+            const haystack = [s.movieTitle, s.screenName, s.format, s.language]
+                .filter(Boolean).join(' ').toLowerCase();
+            if (!haystack.includes(term)) return;
+        }
+
+        shown++;
+        const start = showDateTime.toLocaleString();
+        const isPast = showDateTime <= now;
+
+        tbody.innerHTML += `
+            <tr>
+                <td>${s.movieTitle || ''}</td>
+                <td>${s.screenName || ''}</td>
+                <td>${start}</td>
+                <td>${s.format || ''}</td>
+                <td>₹${s.basePrice}</td>
+                <td>
+                    ${isPast ? '<span style="color: var(--text-muted);">Completed</span>'
+                             : `<button class="btn-danger-sm" onclick="cancelShow(${s.id})">Cancel</button>`}
+                </td>
+            </tr>
+        `;
+    });
+
+    if (shown === 0) {
+        tbody.innerHTML = `<tr><td colspan="6" style="color: var(--text-muted); font-style: italic;">${
+            term ? 'No show matches that search. Clear the box to see them all.'
+                 : 'No shows to display for this scope.'
+        }</td></tr>`;
+    }
+
+    const countEl = document.getElementById('ownerShowCount');
+    if (countEl) {
+        countEl.textContent = term
+            ? `${shown} show(s) match "${term}"`
+            : (shown ? `${shown} show(s)` : '');
+    }
 }
 
 document.getElementById('addShowForm')?.addEventListener('submit', async (e) => {
@@ -277,6 +317,14 @@ document.getElementById('addShowForm')?.addEventListener('submit', async (e) => 
         if (reservedSeatCodes.length > 0) {
             payload.reservedSeatCodes = reservedSeatCodes;
         }
+    }
+
+    // Mirrors the server-side ShowScheduleValidator so an obvious mistake is
+    // reported inline instead of after a round trip.
+    const scheduleProblem = validateShowSchedule(payload, showTiers.length);
+    if (scheduleProblem) {
+        showAlert(scheduleProblem, 'error');
+        return;
     }
 
     try {
@@ -674,4 +722,67 @@ function collectTierPrices() {
         if (!isNaN(v)) out.push({ tierId: parseInt(i.dataset.tierId, 10), price: v });
     });
     return out;
+}
+
+/* =====================================================================
+   Show scheduling input guards.
+   These mirror ShowScheduleValidator on the server, which stays the source of
+   truth; they only save a round trip and read better inline.
+   ===================================================================== */
+
+function toLocalInputValue(date) {
+    const pad = n => String(n).padStart(2, '0');
+    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
+        + `T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
+// Keep the native picker from offering past dates at all.
+(function primeShowStartTimeBounds() {
+    const el = document.getElementById('showStartTime');
+    if (!el) return;
+    const refresh = () => { el.min = toLocalInputValue(new Date()); };
+    refresh();
+    el.addEventListener('focus', refresh);
+})();
+
+/**
+ * Returns the first scheduling problem as a message, or '' when the payload is
+ * good enough to send.
+ */
+function validateShowSchedule(payload, tierCount) {
+    if (!payload.screenId || Number.isNaN(payload.screenId)) return 'Select an auditorium / screen.';
+    if (!payload.movieId || Number.isNaN(payload.movieId)) return 'Select a movie.';
+    if (!payload.startTime) return 'Choose a start date and time.';
+    if (!payload.format) return 'Select a screening format.';
+    if (!payload.language) return 'Select an audio language.';
+
+    const start = new Date(payload.startTime);
+    if (Number.isNaN(start.getTime())) {
+        return 'That start date and time could not be understood. Pick it again.';
+    }
+    if (start <= new Date()) {
+        return 'A show cannot be scheduled in the past. Pick a start time in the future.';
+    }
+    if ((start - new Date()) > 365 * 24 * 60 * 60 * 1000) {
+        return 'That start time is more than a year away. Schedule shows within the next 12 months.';
+    }
+
+    const price = payload.basePrice;
+    if (price !== undefined && price !== null && !(price > 0)) {
+        return 'Ticket price must be greater than zero.';
+    }
+    if (tierCount > 0 && (payload.tierPrices || []).some(p => !(p.price > 0))) {
+        return 'Every seat tier needs a ticket price greater than zero.';
+    }
+
+    const seen = new Set();
+    for (const code of (payload.reservedSeatCodes || [])) {
+        const key = String(code).toUpperCase();
+        if (seen.has(key)) {
+            return `Seat ${code} is listed twice. Each reserved seat can only be listed once.`;
+        }
+        seen.add(key);
+    }
+
+    return '';
 }
