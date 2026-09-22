@@ -87,12 +87,13 @@ function switchTab(tabId) {
 
     // Initialize analytics on first visit
     if (tabId === 'analyticsTab' && typeof initAnalytics === 'function' && !analyticsInitialized) {
-        analyticsInitialized = true;
         const dateFrom = document.getElementById('filterDateFrom');
         const dateTo = document.getElementById('filterDateTo');
         if (dateFrom) dateFrom.value = defaultDateFrom();
         if (dateTo) dateTo.value = defaultDateTo();
-        initAnalytics();
+        // Latch only once the filter bar actually loaded, so a failed attempt can
+        // recover on the next visit instead of leaving empty dropdowns forever.
+        initAnalytics().then(ok => { if (ok !== false) analyticsInitialized = true; });
     }
 
     // Initialize operations tab on first visit
@@ -288,17 +289,31 @@ document.getElementById('addShowForm')?.addEventListener('submit', async (e) => 
     const basePrice = parseFloat(document.getElementById('showPrice').value);
     const hasCaptions = document.getElementById('showCaptions').checked;
 
-    if (!screenId || !movieId) {
-        showAlert('Please select both a screen and a movie.', 'error');
+    clearFieldErrors();
+
+    if (!screenId) {
+        const message = 'Select an auditorium / screen.';
+        showAlert(message, 'error');
+        markFieldError('showScreenSelect', message);
+        return;
+    }
+    if (!movieId) {
+        const message = 'Select a movie.';
+        showAlert(message, 'error');
+        markFieldError('showMovieSelect', message);
         return;
     }
     const tierPrices = collectTierPrices();
     if (showTiers.length > 0 && tierPrices.length !== showTiers.length) {
-        showAlert('Enter a price for every seat tier on this screen.', 'error');
+        const message = 'Enter a price for every seat tier on this screen.';
+        showAlert(message, 'error');
+        markFieldError(scheduleFieldTarget('tierPrices'), message);
         return;
     }
     if (showTiers.length === 0 && isNaN(basePrice)) {
-        showAlert('Enter a ticket price.', 'error');
+        const message = 'Enter a ticket price.';
+        showAlert(message, 'error');
+        markFieldError('showPrice', message);
         return;
     }
     
@@ -320,10 +335,12 @@ document.getElementById('addShowForm')?.addEventListener('submit', async (e) => 
     }
 
     // Mirrors the server-side ShowScheduleValidator so an obvious mistake is
-    // reported inline instead of after a round trip.
-    const scheduleProblem = validateShowSchedule(payload, showTiers.length);
-    if (scheduleProblem) {
-        showAlert(scheduleProblem, 'error');
+    // reported inline instead of after a round trip. Each failure names the
+    // field it belongs to, so the message is never shown without the control.
+    const problem = validateShowSchedule(payload, showTiers.length);
+    if (problem) {
+        showAlert(problem.message, 'error');
+        markFieldError(scheduleFieldTarget(problem.field), problem.message);
         return;
     }
 
@@ -331,8 +348,13 @@ document.getElementById('addShowForm')?.addEventListener('submit', async (e) => 
         await ownerApiCall('/shows', 'POST', payload);
         showAlert('Show scheduled successfully!', 'success');
         document.getElementById('addShowForm').reset();
+        clearFieldErrors();
         loadMyShows();
-    } catch (_) {}
+    } catch (err) {
+        // ownerApiCall() has already shown the server's message; also mark the
+        // field it belongs to (double-booking, locked layout, bad seat codes…).
+        markScheduleErrorFromServer(err && err.message);
+    }
 });
 
 async function cancelShow(id) {
@@ -746,43 +768,54 @@ function toLocalInputValue(date) {
 })();
 
 /**
- * Returns the first scheduling problem as a message, or '' when the payload is
- * good enough to send.
+ * Returns the first scheduling problem as `{ field, message }`, or null when the
+ * payload is good enough to send. The field id lets the caller mark the exact
+ * control, so no error is ever shown without pointing at where it came from.
  */
 function validateShowSchedule(payload, tierCount) {
-    if (!payload.screenId || Number.isNaN(payload.screenId)) return 'Select an auditorium / screen.';
-    if (!payload.movieId || Number.isNaN(payload.movieId)) return 'Select a movie.';
-    if (!payload.startTime) return 'Choose a start date and time.';
-    if (!payload.format) return 'Select a screening format.';
-    if (!payload.language) return 'Select an audio language.';
+    if (!payload.screenId || Number.isNaN(payload.screenId)) {
+        return { field: 'showScreenSelect', message: 'Select an auditorium / screen.' };
+    }
+    if (!payload.movieId || Number.isNaN(payload.movieId)) {
+        return { field: 'showMovieSelect', message: 'Select a movie.' };
+    }
+    if (!payload.startTime) {
+        return { field: 'showStartTime', message: 'Choose a start date and time.' };
+    }
+    if (!payload.format) {
+        return { field: 'showFormat', message: 'Select a screening format.' };
+    }
+    if (!payload.language) {
+        return { field: 'showLanguage', message: 'Select an audio language.' };
+    }
 
     const start = new Date(payload.startTime);
     if (Number.isNaN(start.getTime())) {
-        return 'That start date and time could not be understood. Pick it again.';
+        return { field: 'showStartTime', message: 'That start date and time could not be understood. Pick it again.' };
     }
     if (start <= new Date()) {
-        return 'A show cannot be scheduled in the past. Pick a start time in the future.';
+        return { field: 'showStartTime', message: 'A show cannot be scheduled in the past. Pick a start time in the future.' };
     }
     if ((start - new Date()) > 365 * 24 * 60 * 60 * 1000) {
-        return 'That start time is more than a year away. Schedule shows within the next 12 months.';
+        return { field: 'showStartTime', message: 'That start time is more than a year away. Schedule shows within the next 12 months.' };
     }
 
     const price = payload.basePrice;
     if (price !== undefined && price !== null && !(price > 0)) {
-        return 'Ticket price must be greater than zero.';
+        return { field: 'showPrice', message: 'Ticket price must be greater than zero.' };
     }
     if (tierCount > 0 && (payload.tierPrices || []).some(p => !(p.price > 0))) {
-        return 'Every seat tier needs a ticket price greater than zero.';
+        return { field: 'tierPrices', message: 'Every seat tier needs a ticket price greater than zero.' };
     }
 
     const seen = new Set();
     for (const code of (payload.reservedSeatCodes || [])) {
         const key = String(code).toUpperCase();
         if (seen.has(key)) {
-            return `Seat ${code} is listed twice. Each reserved seat can only be listed once.`;
+            return { field: 'showReservedSeats', message: `Seat ${code} is listed twice. Each reserved seat can only be listed once.` };
         }
         seen.add(key);
     }
 
-    return '';
+    return null;
 }

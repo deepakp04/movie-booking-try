@@ -555,3 +555,33 @@ body {
   color: #90caf9;
   border: 1px solid rgba(66, 165, 245, 0.3);
 }
+
+/* =====================================================================
+   FIELD-LEVEL ERROR MARKING
+
+   A validation message tells the user *what* is wrong; these styles tell
+   them *where*. Added by markFieldError() in operations.js and removed by
+   clearFieldErrors(), so every form marks the offending control the same
+   way instead of only printing a banner at the top of the page.
+   ===================================================================== */
+.input-error,
+input.input-error,
+select.input-error,
+textarea.input-error {
+  border: 2px solid var(--danger-red, #e53935) !important;
+  box-shadow: 0 0 0 3px rgba(229, 57, 53, 0.18);
+  outline: none;
+}
+
+.input-error:focus {
+  border-color: var(--danger-red, #e53935) !important;
+  box-shadow: 0 0 0 3px rgba(229, 57, 53, 0.28);
+}
+
+/* The message that sits directly under the field it belongs to. */
+.field-error-text {
+  color: #ff8a80;
+  font-size: 12px;
+  line-height: 1.35;
+  margin-top: 4px;
+}

@@ -124,13 +124,14 @@ function switchTab(tabId) {
 
     // Initialize analytics on first visit
     if (tabId === 'analyticsTab' && typeof initAnalytics === 'function' && !analyticsInitialized) {
-        analyticsInitialized = true;
         // Set default dates
         const dateFrom = document.getElementById('filterDateFrom');
         const dateTo = document.getElementById('filterDateTo');
         if (dateFrom) dateFrom.value = defaultDateFrom();
         if (dateTo) dateTo.value = defaultDateTo();
-        initAnalytics();
+        // Latch only once the filter bar actually loaded, so a failed attempt can
+        // recover on the next visit instead of leaving empty dropdowns forever.
+        initAnalytics().then(ok => { if (ok !== false) analyticsInitialized = true; });
     }
 
     // Initialize operations tab on first visit
@@ -555,11 +556,15 @@ document.getElementById('addShowForm')?.addEventListener('submit', async (e) => 
             delete payload.basePrice;
         }
         if (showTiers.length > 0 && payload.tierPrices.length !== showTiers.length) {
-            showAlert('Enter a price for every seat tier on this screen.', 'error');
+            const message = 'Enter a price for every seat tier on this screen.';
+            showAlert(message, 'error');
+            markFieldError(Array.from(document.querySelectorAll('.tier-price-input')), message);
             return;
         }
         if (showTiers.length === 0 && payload.basePrice === undefined) {
-            showAlert('Enter a ticket price.', 'error');
+            const message = 'Enter a ticket price.';
+            showAlert(message, 'error');
+            markFieldError('showPrice', message);
             return;
         }
         
@@ -577,21 +582,29 @@ document.getElementById('addShowForm')?.addEventListener('submit', async (e) => 
 
         // Catch the obvious input mistakes locally; the server validates the
         // same rules and remains the source of truth.
-        const scheduleProblem = validateShowSchedule(payload, showTiers.length);
-        if (scheduleProblem) {
-            showAlert(scheduleProblem, 'error');
+        // Returns the field that is wrong along with the message, so the form can
+        // point at the offending control instead of only printing a banner.
+        const problem = validateShowSchedule(payload, showTiers.length);
+        if (problem) {
+            showAlert(problem.message, 'error');
+            markFieldError(scheduleFieldTarget(problem.field), problem.message);
             return;
         }
+
+        clearFieldErrors();
 
         try {
             await adminApiCall('/shows', 'POST', payload);
             showAlert('Show scheduled successfully!', 'success');
             document.getElementById('addShowForm').reset();
+            clearFieldErrors();
             loadShows();
         } catch (err) {
-        console.error('[RENDER ERROR]', err);
-        showAlert(`Something failed while rendering: ${err.message}`, 'error');
-    }
+            console.error('[SCHEDULE SHOW]', err);
+            // adminApiCall() has already shown the server's message; also mark the
+            // field it belongs to (double-booking, locked layout, bad seat codes…).
+            markScheduleErrorFromServer(err.message);
+        }
     });
 });
 
@@ -694,45 +707,56 @@ function primeShowStartTimeBounds(inputId) {
 primeShowStartTimeBounds('showStartTime');
 
 /**
- * Returns the first scheduling problem as a message, or '' when the payload is
- * good enough to send.
+ * Returns the first scheduling problem as `{ field, message }`, or null when the
+ * payload is good enough to send. The field id lets the caller mark the exact
+ * control, so no error is ever shown without pointing at where it came from.
  */
 function validateShowSchedule(payload, tierCount) {
-    if (!payload.screenId || Number.isNaN(payload.screenId)) return 'Select an auditorium / screen.';
-    if (!payload.movieId || Number.isNaN(payload.movieId)) return 'Select a movie.';
-    if (!payload.startTime) return 'Choose a start date and time.';
-    if (!payload.format) return 'Select a screening format.';
-    if (!payload.language) return 'Select an audio language.';
+    if (!payload.screenId || Number.isNaN(payload.screenId)) {
+        return { field: 'showScreenSelect', message: 'Select an auditorium / screen.' };
+    }
+    if (!payload.movieId || Number.isNaN(payload.movieId)) {
+        return { field: 'showMovieSelect', message: 'Select a movie.' };
+    }
+    if (!payload.startTime) {
+        return { field: 'showStartTime', message: 'Choose a start date and time.' };
+    }
+    if (!payload.format) {
+        return { field: 'showFormat', message: 'Select a screening format.' };
+    }
+    if (!payload.language) {
+        return { field: 'showLanguage', message: 'Select an audio language.' };
+    }
 
     const start = new Date(payload.startTime);
     if (Number.isNaN(start.getTime())) {
-        return 'That start date and time could not be understood. Pick it again.';
+        return { field: 'showStartTime', message: 'That start date and time could not be understood. Pick it again.' };
     }
     if (start <= new Date()) {
-        return 'A show cannot be scheduled in the past. Pick a start time in the future.';
+        return { field: 'showStartTime', message: 'A show cannot be scheduled in the past. Pick a start time in the future.' };
     }
     if ((start - new Date()) > 365 * 24 * 60 * 60 * 1000) {
-        return 'That start time is more than a year away. Schedule shows within the next 12 months.';
+        return { field: 'showStartTime', message: 'That start time is more than a year away. Schedule shows within the next 12 months.' };
     }
 
     const price = payload.basePrice;
     if (price !== undefined && price !== null && !(price > 0)) {
-        return 'Ticket price must be greater than zero.';
+        return { field: 'showPrice', message: 'Ticket price must be greater than zero.' };
     }
     if (tierCount > 0 && (payload.tierPrices || []).some(p => !(p.price > 0))) {
-        return 'Every seat tier needs a ticket price greater than zero.';
+        return { field: 'tierPrices', message: 'Every seat tier needs a ticket price greater than zero.' };
     }
 
     const seen = new Set();
     for (const code of (payload.reservedSeatCodes || [])) {
         const key = String(code).toUpperCase();
         if (seen.has(key)) {
-            return `Seat ${code} is listed twice. Each reserved seat can only be listed once.`;
+            return { field: 'showReservedSeats', message: `Seat ${code} is listed twice. Each reserved seat can only be listed once.` };
         }
         seen.add(key);
     }
 
-    return '';
+    return null;
 }
 
 /* =====================================================================
@@ -851,22 +875,81 @@ let mtTool = null;        // { kind: 'TIER', tierId } | { kind: 'PATHWAY' }
 let mtEditable = true;
 let mtPainting = false;
 
-function mtPopulateTheatres() {
-    const sel = document.getElementById('mtTheatreSelect');
+/**
+ * Maintenance Step 1 — City picker. Cities are derived from the theatres that
+ * are already loaded, so no extra request is needed and the list can never
+ * contain a city with no theatres behind it.
+ */
+function mtPopulateCities() {
+    const sel = document.getElementById('mtCitySelect');
     if (!sel) return;
-    sel.innerHTML = '<option value="" disabled selected>Select Theatre</option>';
+    const previous = sel.value;
+
+    const seen = new Set();
+    const cities = [];
     (window.__theatreCache || []).forEach(t => {
+        if (t.cityId && !seen.has(String(t.cityId))) {
+            seen.add(String(t.cityId));
+            cities.push({ id: t.cityId, name: t.cityName || ('City #' + t.cityId) });
+        }
+    });
+    cities.sort((a, b) => String(a.name).localeCompare(String(b.name)));
+
+    sel.innerHTML = '<option value="">All Cities</option>';
+    cities.forEach(c => {
         const o = document.createElement('option');
-        o.value = t.id;
-        o.textContent = `${t.name} (${t.cityName})`;
+        o.value = c.id;
+        o.textContent = c.name;
         sel.appendChild(o);
     });
+    sel.value = cities.some(c => String(c.id) === String(previous)) ? previous : '';
+}
+
+/**
+ * City -> Theatre for Maintenance. Choosing a city leaves only its theatres in
+ * the picker, so the screen being edited is quick to find on a long list.
+ * A theatre that is no longer reachable is dropped rather than kept selected.
+ */
+function mtNarrowTheatresByCity() {
+    const sel = document.getElementById('mtTheatreSelect');
+    if (!sel) return;
+    const cityEl = document.getElementById('mtCitySelect');
+    const cityId = cityEl ? cityEl.value : '';
+    const previous = sel.value;
+
+    const theatres = (window.__theatreCache || [])
+        .filter(t => !cityId || String(t.cityId) === String(cityId));
+
+    sel.innerHTML = `<option value="" disabled selected>${
+        (cityId && theatres.length === 0) ? 'No theatres in this city' : 'Select Theatre'
+    }</option>`;
+    theatres.forEach(t => {
+        const o = document.createElement('option');
+        o.value = t.id;
+        o.textContent = cityId ? t.name : `${t.name} (${t.cityName})`;
+        sel.appendChild(o);
+    });
+    sel.value = theatres.some(t => String(t.id) === String(previous)) ? previous : '';
+}
+
+function mtOnCityChange() {
+    clearFieldErrors();
+    mtNarrowTheatresByCity();
+    // Rebuild the screen list (and reset the panels) for whatever theatre the
+    // narrowed list now has selected — or for none, if it was dropped.
+    mtOnTheatreChange();
+}
+
+function mtPopulateTheatres() {
+    mtPopulateCities();
+    mtNarrowTheatresByCity();
 }
 
 function mtOnTheatreChange() {
     const theatreId = parseInt(document.getElementById('mtTheatreSelect').value, 10);
     const t = (window.__theatreCache || []).find(x => x.id === theatreId);
     const sel = document.getElementById('mtScreenSelect');
+    clearFieldErrors();
     sel.innerHTML = '<option value="" disabled selected>Select Screen</option>';
     document.getElementById('mtPanels').classList.add('hidden');
     mtScreenId = null;
@@ -901,8 +984,12 @@ async function mtLoadLayout() {
         if (!mtEditable) {
             banner.textContent = '🔒 ' + (d.lockReason || 'This layout is locked.');
             banner.classList.remove('hidden');
+            // Mark the screen that caused the refusal, so the reason and the field
+            // it belongs to are shown together.
+            markFieldError('mtScreenSelect', d.lockReason || 'This screen has shows scheduled, so its layout cannot be changed.');
         } else {
             banner.classList.add('hidden');
+            clearFieldError('mtScreenSelect');
         }
 
         mtRenderTierTable();

@@ -73,8 +73,14 @@ function opsOpenCard(cardId) {
     // Show the requested card
     const card = document.getElementById(cardId);
     if (card) card.classList.remove('hidden');
-}
 
+    // Screen Utilisation has a single view (no sub-tabs), so make sure an
+    // opsShowSection() call from another card has not left its content hidden.
+    if (cardId === 'opsScreenUtilCard') {
+        const overview = document.getElementById('opsUtilOverview');
+        if (overview) overview.classList.remove('hidden');
+    }
+}
 function opsBackToCards() {
     // Hide all card views
     document.querySelectorAll('.ops-card-view').forEach(el => el.classList.add('hidden'));
@@ -119,6 +125,148 @@ async function opsApiCall(endpoint, method = 'GET', body = null) {
         throw new Error(result.message || `HTTP ${response.status}`);
     }
     return result;
+}
+
+// ================= SHARED FIELD VALIDATION HELPERS =================
+//
+// Lives here because operations.js is the one script loaded by both admin.html
+// and owner.html. Every form on both portals marks its invalid controls through
+// these functions, so a validation message never appears without also pointing
+// at the field it is about.
+//
+// Usage:
+//   markFieldError('showStartTime', 'A show cannot be scheduled in the past.');
+//   markFieldError(['filterDateFrom', 'filterDateTo'], 'Start date cannot be after end date.');
+//   clearFieldErrors();
+
+/**
+ * Resolve a field reference (element, id, or array of either) to real elements.
+ * Unknown ids are skipped rather than throwing, so a missing control on one
+ * portal can never break a shared code path.
+ */
+function __fieldElements(target) {
+    const list = Array.isArray(target) ? target : [target];
+    return list
+        .map(t => (typeof t === 'string' ? document.getElementById(t) : t))
+        .filter(Boolean);
+}
+
+/**
+ * Mark one or more fields as invalid: red border, an inline message directly
+ * under each field, and focus/scroll to the first one so the user is taken to
+ * the problem instead of hunting for it.
+ *
+ * Always clears previous marks first, so only the current error is shown.
+ */
+function markFieldError(target, message) {
+    clearFieldErrors();
+    const els = __fieldElements(target);
+    if (els.length === 0) return;
+
+    els.forEach(el => {
+        el.classList.add('input-error');
+        el.setAttribute('aria-invalid', 'true');
+
+        const host = el.closest('.form-group')
+            || el.closest('.filter-group')
+            || el.parentElement;
+        if (!host) return;
+
+        // One hint per field, reused, so repeated attempts cannot stack up.
+        let hint = host.querySelector('.field-error-text');
+        if (!hint) {
+            hint = document.createElement('div');
+            hint.className = 'field-error-text';
+            host.appendChild(hint);
+        }
+        hint.textContent = message || 'This field needs attention.';
+    });
+
+    const first = els[0];
+    try {
+        first.focus({ preventScroll: true });
+        first.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    } catch (e) {
+        // Older browsers ignore the options object; not worth failing over.
+        first.focus();
+    }
+}
+
+/** Remove every field-level error mark and its message. */
+function clearFieldErrors() {
+    document.querySelectorAll('.input-error').forEach(el => {
+        el.classList.remove('input-error');
+        el.removeAttribute('aria-invalid');
+    });
+    document.querySelectorAll('.field-error-text').forEach(el => el.remove());
+}
+
+/**
+ * Clear the mark on specific fields only. Used when a field is edited so the
+ * red border disappears as soon as the user starts fixing it.
+ */
+function clearFieldError(target) {
+    __fieldElements(target).forEach(el => {
+        el.classList.remove('input-error');
+        el.removeAttribute('aria-invalid');
+        const host = el.closest('.form-group')
+            || el.closest('.filter-group')
+            || el.parentElement;
+        const hint = host && host.querySelector('.field-error-text');
+        if (hint) hint.remove();
+    });
+}
+
+/**
+ * Map a scheduling field token onto the control(s) to mark. Tier prices are
+ * generated rows without ids, so they are addressed by class and fall back to
+ * the base price box when the screen has no tiers.
+ */
+function scheduleFieldTarget(name) {
+    if (name === 'tierPrices') {
+        const inputs = Array.from(document.querySelectorAll('.tier-price-input'));
+        return inputs.length ? inputs : 'showPrice';
+    }
+    return name;
+}
+
+/**
+ * Point a scheduling error from the API at the control that caused it.
+ *
+ * The server-side ShowScheduleValidator is the source of truth and its messages
+ * are user-safe, but a message alone leaves the user hunting for the field, so
+ * the text is matched to the control it concerns. Returns true when the error
+ * was mapped, false when it is something we cannot attribute to one field.
+ */
+function markScheduleErrorFromServer(message) {
+    const text = String(message || '').toLowerCase();
+    if (!text) return false;
+
+    const tierInputs = Array.from(document.querySelectorAll('.tier-price-input'));
+
+    if (text.includes('seat codes') || text.includes('you reserved')) {
+        markFieldError('showReservedSeats', message);
+    } else if (text.includes('seat layout') || text.includes('draw and save')) {
+        markFieldError('showScreenSelect', message);
+    } else if (text.includes('seat tier')) {
+        markFieldError(tierInputs.length ? tierInputs : 'showPrice', message);
+    } else if (text.includes('ticket price')) {
+        markFieldError('showPrice', message);
+    } else if (text.includes('not offered in') || text.includes('screening format')) {
+        markFieldError('showFormat', message);
+    } else if (text.includes('audio')) {
+        markFieldError('showLanguage', message);
+    } else if (text.includes('already booked') || text.includes('past')
+        || text.includes('year away') || text.includes('start date and time')) {
+        markFieldError('showStartTime', message);
+    } else if (text.includes('select a screen') || text.includes('screen not found')) {
+        markFieldError('showScreenSelect', message);
+    } else if (text.includes('select a movie') || text.includes('movie not found')) {
+        markFieldError('showMovieSelect', message);
+    } else {
+        return false;
+    }
+    return true;
 }
 
 // ================= DROPDOWN LOADERS =================
@@ -210,23 +358,24 @@ async function opsLoadTheatresDropdown() {
         opsTheatreFallback = theatres.map(t => ({
             id: t.id, name: t.name, cityName: t.cityName, cityId: t.cityId
         }));
-        // opsTheatreSelect is deliberately absent: it belongs to the Theatre Report
-        // and is narrowed by its city picker, so filling it with every theatre here
-        // would silently undo that narrowing depending on call order.
-        const selects = ['incTheatre', 'opsUtilTheatre'];
-        selects.forEach(id => {
-            const select = document.getElementById(id);
-            if (!select) return;
-            while (select.options.length > 1) select.remove(1);
+        // opsTheatreSelect and opsUtilTheatre are deliberately absent: both are
+        // narrowed by their own city picker, so filling them with every theatre
+        // here would silently undo that narrowing depending on call order.
+        const incidentSelect = document.getElementById('incTheatre');
+        if (incidentSelect) {
+            while (incidentSelect.options.length > 1) incidentSelect.remove(1);
             theatres.forEach(t => {
                 const opt = document.createElement('option');
                 opt.value = t.id;
                 opt.textContent = t.name;
-                select.appendChild(opt);
+                incidentSelect.appendChild(opt);
             });
-        });
-        // Keep the Theatre Report picker in step with the fallback list.
+        }
+        // Keep the Theatre Report and Screen Utilisation pickers in step with the
+        // fallback theatre list (they are rebuilt whenever the city changes).
         opsPopulateTheatreReportCities();
+        opsPopulateUtilCities();
+        opsNarrowUtilTheatres();
     } catch (e) {
         console.error('Failed to load theatres:', e);
     }
@@ -279,6 +428,8 @@ function populateFilterDropdowns() {
     opsCascadeOpsFilters('showReport', 'init');
     opsPopulateTHFilterDropdowns();
     opsPopulateTheatreReportCities();
+    opsPopulateUtilCities();
+    opsNarrowUtilTheatres();
     // Also populate conflict check dropdowns
     populateConflictDropdowns();
 }
@@ -334,6 +485,12 @@ function opsCascadeOpsFilters(group, changed) {
     if ((changed === 'city' || changed === 'theatre' || changed === 'screen') && movieEl) movieEl.value = '';
 
     const cityId = cityEl ? cityEl.value : '';
+
+    // City list is static, so it is rebuilt on every pass. Without this the City
+    // dropdown stayed empty on both the Show Report and Ticket Holders rows.
+    if (cityEl) {
+        opsFillSelect(ids.city, data.cities || [], c => c.id, c => c.name, 'All Cities');
+    }
 
     // City -> Theatre
     if (theatreEl) {
@@ -416,6 +573,43 @@ function opsNarrowTheatreReport() {
     opsFillSelect('opsTheatreSelect', theatres, t => t.id,
         t => t.cityName ? `${t.name} (${t.cityName})` : t.name,
         theatres.length === 0 ? 'No theatres in this city' : 'Select Theatre');
+}
+
+/**
+ * Screen Utilisation — City picker. The list is only available on the admin
+ * portal (it comes from /filter-options); an owner has a single theatre, so the
+ * control is absent and this is a no-op there.
+ */
+function opsPopulateUtilCities() {
+    const el = document.getElementById('opsUtilCity');
+    if (!el) return;
+    opsFillSelect('opsUtilCity', opsFilterData.cities || [],
+        c => c.id, c => c.name, 'All Cities');
+}
+
+/**
+ * Screen Utilisation — City -> Theatre. Without a city this lists every theatre,
+ * and with one it lists only that city's theatres, so picking the theatre being
+ * analysed does not mean scrolling through the whole chain.
+ */
+function opsNarrowUtilTheatres() {
+    const sel = document.getElementById('opsUtilTheatre');
+    if (!sel) return;
+    const cityEl = document.getElementById('opsUtilCity');
+    const cityId = cityEl ? cityEl.value : '';
+    const theatres = opsTheatreList()
+        .filter(t => !cityId || String(t.cityId) === String(cityId));
+    opsFillSelect('opsUtilTheatre', theatres, t => t.id,
+        t => (t.cityName && !cityId) ? `${t.name} (${t.cityName})` : t.name,
+        theatres.length === 0 ? 'No theatres in this city' : 'Select Theatre');
+}
+
+function opsOnUtilCityChange() {
+    clearFieldErrors();
+    opsNarrowUtilTheatres();
+    // An owner reaches this through the same handler; the payload shrinks to the
+    // dates because the theatre is resolved from the session on the server.
+    opsLoadUtilisation();
 }
 
 function populateConflictDropdowns() {
@@ -508,13 +702,16 @@ async function opsFilteredShows(group) {
     const screenId = val(ids.screen);
     const movieTitle = val(ids.movie);
 
-    // An impossible range is called out rather than quietly returning nothing.
+    // An impossible range is called out and the two date boxes are marked, so the
+    // user is told what is wrong and which fields to fix.
     if (dateFrom && dateTo && dateFrom > dateTo) {
-        opsShowFilterWarning(group,
-            `Start date (${dateFrom}) cannot be after end date (${dateTo}). Pick a valid range.`);
+        const message = `Start date (${dateFrom}) cannot be after end date (${dateTo}). Pick a valid range.`;
+        opsShowFilterWarning(group, message);
+        markFieldError([ids.dateFrom, ids.dateTo], message);
         return [];
     }
     opsShowFilterWarning(group, '');
+    clearFieldError([ids.dateFrom, ids.dateTo]);
 
     const result = await opsApiCall('/shows?scope=all');
     if (!result) return [];
@@ -582,6 +779,7 @@ function opsResetShowFilters() {
         const el = document.getElementById(id);
         if (el) el.value = '';
     });
+    clearFieldErrors();
     opsShowFilterWarning('showReport', '');
     opsCascadeOpsFilters('showReport', 'init');
     opsLoadShowsDropdown();
@@ -596,6 +794,7 @@ function opsResetTHFilters() {
     const status = document.getElementById('opsTHFilterStatus');
     if (status) status.value = 'CONFIRMED';
 
+    clearFieldErrors();
     opsShowFilterWarning('ticketHolders', '');
     opsCascadeOpsFilters('ticketHolders', 'init');
 
@@ -1375,7 +1574,8 @@ function opsToggleAttendees(btn) {
 // ================= SCREEN UTILISATION =================
 
 async function opsLoadUtilisation() {
-    const theatreId = OPS_API_BASE === '/api/admin'
+    const isAdmin = OPS_API_BASE === '/api/admin';
+    const theatreId = isAdmin
         ? document.getElementById('opsUtilTheatre')?.value
         : null;
     const dateFrom = document.getElementById('opsUtilDateFrom')?.value || '';
@@ -1383,16 +1583,42 @@ async function opsLoadUtilisation() {
 
     const container = document.getElementById('opsUtilOverviewResult');
     if (!container) return;
+
+    clearFieldErrors();
+
+    // The admin endpoint requires theatreId, so catch the missing selection here
+    // and point at the picker instead of letting the server answer with a raw 400.
+    if (isAdmin && !theatreId) {
+        const message = 'Select a theatre to load its screen utilisation.';
+        markFieldError('opsUtilTheatre', message);
+        container.innerHTML = `<p style="color: #ff5252;">⚠️ ${message}</p>`;
+        return;
+    }
+
+    if (dateFrom && dateTo && dateFrom > dateTo) {
+        const message = `Start date (${dateFrom}) cannot be after end date (${dateTo}). Pick a valid range.`;
+        markFieldError(['opsUtilDateFrom', 'opsUtilDateTo'], message);
+        container.innerHTML = `<p style="color: #ff5252;">⚠️ ${message}</p>`;
+        return;
+    }
+
+    // A mistyped year would otherwise silently report 0% utilisation.
+    if (dateFrom && dateTo) {
+        const days = (new Date(dateTo) - new Date(dateFrom)) / 86400000;
+        if (days > 366) {
+            const message = `That range covers ${Math.round(days)} days. Analyse at most one year at a time.`;
+            markFieldError(['opsUtilDateFrom', 'opsUtilDateTo'], message);
+            container.innerHTML = `<p style="color: #ff5252;">⚠️ ${message}</p>`;
+            return;
+        }
+    }
+
     container.innerHTML = '<p style="color: var(--text-muted);">Loading...</p>';
 
     try {
-        let endpoint;
-        if (OPS_API_BASE === '/api/admin') {
-            if (!theatreId) { container.innerHTML = '<p style="color: #ff5252;">Please select a theatre.</p>'; return; }
-            endpoint = `/utilisation?theatreId=${theatreId}&dateFrom=${dateFrom}&dateTo=${dateTo}`;
-        } else {
-            endpoint = `/utilisation?dateFrom=${dateFrom}&dateTo=${dateTo}`;
-        }
+        const endpoint = isAdmin
+            ? `/utilisation?theatreId=${theatreId}&dateFrom=${dateFrom}&dateTo=${dateTo}`
+            : `/utilisation?dateFrom=${dateFrom}&dateTo=${dateTo}`;
 
         const result = await opsApiCall(endpoint);
         if (!result) return;

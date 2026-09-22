@@ -37,9 +37,14 @@ function defaultDateTo() {
 
 // ==================== INIT ====================
 
+/**
+ * Returns false when the filter options could not be loaded, so the caller can
+ * leave the analytics tab un-latched and let a later visit try again.
+ */
 async function initAnalytics() {
-    await loadFilterOptions();
+    const filtersOk = await loadFilterOptions();
     applyFilters();
+    return filtersOk;
 }
 
 // ==================== FILTERS ====================
@@ -56,8 +61,19 @@ async function loadFilterOptions() {
         const res = await fetch(`${ANALYTICS_API_BASE}/filters`, {
             headers: { 'Authorization': `Bearer ${token}` }
         });
-        const result = await res.json();
-        if (!result.success) return;
+
+        let result = null;
+        try {
+            result = await res.json();
+        } catch (parseErr) {
+            throw new Error(`HTTP ${res.status} while loading filter options`);
+        }
+
+        // Previously this returned silently, which left every dropdown on the bar
+        // looking broken (no options at all). A failure is now reported.
+        if (!res.ok || !result || result.success === false || !result.data) {
+            throw new Error((result && result.message) || `HTTP ${res.status} while loading filter options`);
+        }
 
         const f = result.data;
         analyticsFilterData = {
@@ -65,18 +81,66 @@ async function loadFilterOptions() {
             theatres: f.theatres || [],
             screens: f.screens || [],
             cities: f.cities || [],
-            formats: (f.formats || []).map(fmt => ({ id: fmt.name, name: fmt.name.replace('_', ' ') })),
+            formats: (f.formats || []).map(fmt => ({ id: fmt.name, name: String(fmt.name).replace('_', ' ') })),
             languages: (f.languages || []).map(lang => ({ id: lang.name, name: lang.name }))
         };
 
-        populateSelect('filterCity', analyticsFilterData.cities, 'All Cities');
-        populateSelect('filterMovie', analyticsFilterData.movies, 'All Movies');
-        populateSelect('filterFormat', analyticsFilterData.formats, 'All Formats');
-        populateSelect('filterLanguage', analyticsFilterData.languages, 'All Languages');
+        // Empty lists say so rather than rendering a dropdown with no options.
+        populateSelect('filterCity', analyticsFilterData.cities, 'All Cities', 'No cities with shows yet');
+        populateSelect('filterMovie', analyticsFilterData.movies, 'All Movies', 'No movies scheduled yet');
+        populateSelect('filterFormat', analyticsFilterData.formats, 'All Formats', 'No formats available');
+        populateSelect('filterLanguage', analyticsFilterData.languages, 'All Languages', 'No languages available');
         reloadAnalyticsCascade();
+
+        analyticsNotices.filters = '';
+        renderAnalyticsNotices();
+        return true;
     } catch (err) {
         console.error('[ANALYTICS] Failed to load filter options:', err);
+        analyticsNotices.filters = 'Filter options could not be loaded, so the dropdowns below are empty. ' + err.message;
+        renderAnalyticsNotices();
+        return false;
     }
+}
+
+// ==================== FILTER BAR NOTICES ====================
+//
+// Two things can go wrong on the analytics bar — the filter list failing to
+// load, and a backwards date range — and they must be able to be shown at the
+// same time without one wiping the other.
+
+const analyticsNotices = { filters: '', dates: '' };
+
+function renderAnalyticsNotices() {
+    const box = document.getElementById('analyticsFilterError');
+    if (!box) return;
+
+    box.innerHTML = '';
+    const parts = [];
+    if (analyticsNotices.filters) parts.push('⚠️ ' + analyticsNotices.filters);
+    if (analyticsNotices.dates) parts.push('⚠️ ' + analyticsNotices.dates);
+
+    if (parts.length === 0) {
+        box.classList.add('hidden');
+        return;
+    }
+
+    const text = document.createElement('span');
+    text.textContent = parts.join(' ');
+    box.appendChild(text);
+
+    // Give the user a way out of a failed load without reloading the page.
+    if (analyticsNotices.filters) {
+        const retry = document.createElement('button');
+        retry.type = 'button';
+        retry.className = 'btn btn-secondary btn-sm';
+        retry.style.marginLeft = '12px';
+        retry.textContent = 'Retry';
+        retry.onclick = () => loadFilterOptions().then(ok => { if (ok) applyFilters(); });
+        box.appendChild(retry);
+    }
+
+    box.classList.remove('hidden');
 }
 
 function populateSelect(elementId, items, defaultLabel, emptyLabel) {
@@ -148,18 +212,25 @@ function onAnalyticsFilterChange(changed) {
  * would otherwise come back as an empty dashboard with no explanation.
  */
 function validateAnalyticsDates() {
-    const from = document.getElementById('filterDateFrom')?.value || '';
-    const to = document.getElementById('filterDateTo')?.value || '';
-    const box = document.getElementById('analyticsFilterError');
+    const fromEl = document.getElementById('filterDateFrom');
+    const toEl = document.getElementById('filterDateTo');
+    const from = (fromEl && fromEl.value) || '';
+    const to = (toEl && toEl.value) || '';
 
     const message = (from && to && from > to)
         ? `Start date (${from}) cannot be after end date (${to}). Pick a valid range.`
         : '';
 
-    if (box) {
-        box.textContent = message ? '⚠️ ' + message : '';
-        box.classList.toggle('hidden', !message);
+    analyticsNotices.dates = message;
+
+    // Mark the two date boxes as well, so the message and the fields agree.
+    if (message) {
+        markFieldError([fromEl, toEl], message);
+    } else {
+        clearFieldError([fromEl, toEl]);
     }
+
+    renderAnalyticsNotices();
     return !message;
 }
 

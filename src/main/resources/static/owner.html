@@ -734,24 +734,22 @@
                     <div style="margin-bottom: 12px;">
                         <button class="btn btn-secondary btn-sm" onclick="opsBackToCards()">← Back</button>
                     </div>
-                    <div class="analytics-filters" style="margin-bottom: 16px;">
-                        <button class="btn btn-secondary btn-sm" onclick="opsShowSection('opsUtilOverview')">📊 Overview</button>
-                        <!-- <button class="btn btn-secondary btn-sm" onclick="opsShowSection('opsUtilConflict')">⚠️ Conflict Check</button> -->
-                    </div>
 
-                    <!-- UTILISATION OVERVIEW -->
+                    <!-- UTILISATION OVERVIEW — the card's only view, shown directly.
+                         No City/Theatre pickers: an owner has exactly one theatre, so
+                         the server resolves it from the session. -->
                     <div id="opsUtilOverview" class="ops-section">
                         <div class="admin-card">
                             <h3>Screen Utilisation Overview</h3>
-                            <p class="subtitle">Screen usage metrics for your theatre.</p>
-                            <div class="form-row" style="margin-bottom: 12px;">
-                                <div class="form-group">
+                            <p class="subtitle">Screen usage metrics for your theatre. Pick the period to analyse.</p>
+                            <div class="analytics-filters" style="margin-bottom: 12px;">
+                                <div class="filter-group">
                                     <label for="opsUtilDateFrom">Date From</label>
-                                    <input type="date" id="opsUtilDateFrom">
+                                    <input type="date" id="opsUtilDateFrom" onchange="opsLoadUtilisation()">
                                 </div>
-                                <div class="form-group">
+                                <div class="filter-group">
                                     <label for="opsUtilDateTo">Date To</label>
-                                    <input type="date" id="opsUtilDateTo">
+                                    <input type="date" id="opsUtilDateTo" onchange="opsLoadUtilisation()">
                                 </div>
                                 <button class="btn btn-primary btn-sm" onclick="opsLoadUtilisation()" style="align-self: flex-end;">Load</button>
                             </div>

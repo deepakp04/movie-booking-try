@@ -386,7 +386,14 @@
                 <!-- STEP 1 -->
                 <div class="admin-card">
                     <h3>Step 1 &mdash; Choose a Screen</h3>
+                    <p class="subtitle">Narrow by city first, then pick the theatre and screen.</p>
                     <div class="form-row">
+                        <div class="form-group">
+                            <label for="mtCitySelect">City</label>
+                            <select id="mtCitySelect" onchange="mtOnCityChange()">
+                                <option value="">All Cities</option>
+                            </select>
+                        </div>
                         <div class="form-group">
                             <label for="mtTheatreSelect">Theatre</label>
                             <select id="mtTheatreSelect" onchange="mtOnTheatreChange()">
@@ -1027,30 +1034,33 @@
                     <div style="margin-bottom: 12px;">
                         <button class="btn btn-secondary btn-sm" onclick="opsBackToCards()">← Back</button>
                     </div>
-                    <div class="analytics-filters" style="margin-bottom: 16px;">
-                        <button class="btn btn-secondary btn-sm" onclick="opsShowSection('opsUtilOverview')">📊 Overview</button>
-                        <!-- <button class="btn btn-secondary btn-sm" onclick="opsShowSection('opsUtilConflict')">⚠️ Conflict Check</button> -->
-                    </div>
 
-                    <!-- UTILISATION OVERVIEW -->
+                    <!-- UTILISATION OVERVIEW — the card's only view, shown directly.
+                         No Overview sub-tab: the filters are on screen immediately. -->
                     <div id="opsUtilOverview" class="ops-section">
                         <div class="admin-card">
                             <h3>Screen Utilisation Overview</h3>
-                            <p class="subtitle">Screen usage metrics for the selected theatre and period.</p>
-                            <div class="form-row" style="margin-bottom: 12px;">
-                                <div class="form-group">
+                            <p class="subtitle">Pick a city to narrow the theatre list, then choose the period to analyse.</p>
+                            <div class="analytics-filters" style="margin-bottom: 12px;">
+                                <div class="filter-group">
+                                    <label for="opsUtilCity">City</label>
+                                    <select id="opsUtilCity" onchange="opsOnUtilCityChange()">
+                                        <option value="">All Cities</option>
+                                    </select>
+                                </div>
+                                <div class="filter-group">
                                     <label for="opsUtilTheatre">Theatre</label>
                                     <select id="opsUtilTheatre" onchange="opsLoadUtilisation()">
                                         <option value="" disabled selected>Select Theatre</option>
                                     </select>
                                 </div>
-                                <div class="form-group">
+                                <div class="filter-group">
                                     <label for="opsUtilDateFrom">Date From</label>
-                                    <input type="date" id="opsUtilDateFrom">
+                                    <input type="date" id="opsUtilDateFrom" onchange="opsLoadUtilisation()">
                                 </div>
-                                <div class="form-group">
+                                <div class="filter-group">
                                     <label for="opsUtilDateTo">Date To</label>
-                                    <input type="date" id="opsUtilDateTo">
+                                    <input type="date" id="opsUtilDateTo" onchange="opsLoadUtilisation()">
                                 </div>
                                 <button class="btn btn-primary btn-sm" onclick="opsLoadUtilisation()" style="align-self: flex-end;">Load</button>
                             </div>
