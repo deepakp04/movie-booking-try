@@ -689,12 +689,35 @@ public class AnalyticsRepository {
 
     // ==================== FILTER OPTIONS ====================
 
-    public FilterOptionsResponse getFilterOptions(Long restrictToTheatreId) {
-        String theatreFilter = restrictToTheatreId != null
-            ? " AND t.id = " + restrictToTheatreId + " "
-            : "";
+    /**
+     * The single place that decides how a filter-option query is scoped. Both
+     * fragments are trimmed and joined with an explicit newline, so a variant can
+     * never be assembled into invalid SQL: the cities query previously inlined its
+     * own copy of this fragment without a trailing space and produced
+     * "... AND t.id = 1ORDER BY c.name", which failed for every theatre owner while
+     * the unscoped (admin) path kept working. The theatre id is bound as a query
+     * parameter rather than concatenated into the statement.
+     */
+    private static String filterOptionQuery(String head, String orderBy, boolean scoped) {
+        StringBuilder sql = new StringBuilder(head.stripTrailing());
+        if (scoped) {
+            sql.append("\n  AND t.id = :theatreId");
+        }
+        return sql.append("\n").append(orderBy.strip()).toString();
+    }
 
-        String movieSql = """
+    private List<Object[]> runFilterOptionQuery(String sql, Long restrictToTheatreId) {
+        jakarta.persistence.Query query = em.createNativeQuery(sql);
+        if (restrictToTheatreId != null) {
+            query.setParameter("theatreId", restrictToTheatreId);
+        }
+        return query.getResultList();
+    }
+
+    public FilterOptionsResponse getFilterOptions(Long restrictToTheatreId) {
+        boolean scoped = restrictToTheatreId != null;
+
+        String movieSql = filterOptionQuery("""
             SELECT DISTINCT m.id, m.title
             FROM movies m
             JOIN shows s ON s.movie_id = m.id
@@ -702,45 +725,25 @@ public class AnalyticsRepository {
             JOIN theatres t ON scr.theatre_id = t.id
             WHERE m.is_deleted = false AND s.is_deleted = false
               AND scr.is_deleted = false AND t.is_deleted = false
-            """ + theatreFilter + """
-            ORDER BY m.title
-            """;
-        List<Object[]> movieRows = em.createNativeQuery(movieSql).getResultList();
-        List<FilterOption> movies = movieRows.stream()
-            .map(r -> new FilterOption(toLong(r[0]), String.valueOf(r[1]), null))
-            .toList();
+            """, "ORDER BY m.title", scoped);
 
-        String theatreSql = """
+        String theatreSql = filterOptionQuery("""
             SELECT DISTINCT t.id, t.name, t.city_id
             FROM theatres t
             JOIN screens scr ON scr.theatre_id = t.id
             JOIN shows s ON s.screen_id = scr.id
             WHERE t.is_deleted = false AND scr.is_deleted = false AND s.is_deleted = false
-            """ + theatreFilter + """
-            ORDER BY t.name
-            """;
-        List<Object[]> theatreRows = em.createNativeQuery(theatreSql).getResultList();
-        List<FilterOption> theatres = theatreRows.stream()
-            .map(r -> new FilterOption(toLong(r[0]), String.valueOf(r[1]),
-                r[2] != null ? toLong(r[2]) : null))
-            .toList();
+            """, "ORDER BY t.name", scoped);
 
-        String screenSql = """
+        String screenSql = filterOptionQuery("""
             SELECT DISTINCT scr.id, scr.name, scr.theatre_id
             FROM screens scr
-            JOIN theatres t ON scr.theatre_id = t.id
             JOIN shows s ON s.screen_id = scr.id
-            WHERE scr.is_deleted = false AND t.is_deleted = false AND s.is_deleted = false
-            """ + theatreFilter + """
-            ORDER BY scr.name
-            """;
-        List<Object[]> screenRows = em.createNativeQuery(screenSql).getResultList();
-        List<FilterOption> screens = screenRows.stream()
-            .map(r -> new FilterOption(toLong(r[0]), String.valueOf(r[1]),
-                r[2] != null ? toLong(r[2]) : null))
-            .toList();
+            JOIN theatres t ON scr.theatre_id = t.id
+            WHERE scr.is_deleted = false AND s.is_deleted = false AND t.is_deleted = false
+            """, "ORDER BY scr.name", scoped);
 
-        String citySql = """
+        String citySql = filterOptionQuery("""
             SELECT DISTINCT c.id, c.name
             FROM cities c
             JOIN theatres t ON t.city_id = c.id
@@ -748,19 +751,32 @@ public class AnalyticsRepository {
             JOIN shows s ON s.screen_id = scr.id
             WHERE c.is_deleted = false AND t.is_deleted = false
               AND scr.is_deleted = false AND s.is_deleted = false
-            """ + (restrictToTheatreId != null ? " AND t.id = " + restrictToTheatreId : "") + """
-            ORDER BY c.name
-            """;
-        List<Object[]> cityRows = em.createNativeQuery(citySql).getResultList();
+            """, "ORDER BY c.name", scoped);
+
+        List<Object[]> movieRows = runFilterOptionQuery(movieSql, restrictToTheatreId);
+        List<FilterOption> movies = movieRows.stream()
+            .map(r -> new FilterOption(toLong(r[0]), String.valueOf(r[1]), null))
+            .toList();
+
+        List<Object[]> theatreRows = runFilterOptionQuery(theatreSql, restrictToTheatreId);
+        List<FilterOption> theatres = theatreRows.stream()
+            .map(r -> new FilterOption(toLong(r[0]), String.valueOf(r[1]),
+                r[2] != null ? toLong(r[2]) : null))
+            .toList();
+
+        List<Object[]> screenRows = runFilterOptionQuery(screenSql, restrictToTheatreId);
+        List<FilterOption> screens = screenRows.stream()
+            .map(r -> new FilterOption(toLong(r[0]), String.valueOf(r[1]),
+                r[2] != null ? toLong(r[2]) : null))
+            .toList();
+
+        List<Object[]> cityRows = runFilterOptionQuery(citySql, restrictToTheatreId);
         List<FilterOption> cities = cityRows.stream()
             .map(r -> new FilterOption(toLong(r[0]), String.valueOf(r[1]), null))
             .toList();
 
-        List<FilterOption> formats = formatOptions();
-
-        List<FilterOption> languages = languageOptions();
-
-        return new FilterOptionsResponse(movies, theatres, screens, cities, formats, languages, null);
+        return new FilterOptionsResponse(movies, theatres, screens, cities,
+                formatOptions(), languageOptions(), null);
     }
 
     /**

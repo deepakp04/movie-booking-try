@@ -186,10 +186,45 @@ async function loadFilterOptions() {
         return true;
     } catch (err) {
         console.error('[ANALYTICS] Failed to load filter options:', err);
-        analyticsNotices.filters = 'Filter options could not be loaded, so the dropdowns below are empty. ' + err.message;
+        // Never leave the whole bar unusable: formats and languages mirror the
+        // server enums, so they stay usable while every dropdown that can only be
+        // filled from the database is labelled rather than silently empty.
+        populateStaticFilterOptions();
+        analyticsNotices.filters = 'Filter options could not be loaded, so the dropdowns below are empty. '
+            + 'Formats and languages fall back to the supported list. ' + err.message;
         renderAnalyticsNotices();
         return false;
     }
+}
+
+/**
+ * Fallback used when the filter endpoint fails: static lists mirroring MovieFormat
+ * and AudioLanguage on the server, plus an explicit label on every dropdown that
+ * could only come from the database. The bar then still explains itself instead of
+ * rendering every dropdown empty with no reason given.
+ */
+function populateStaticFilterOptions() {
+    analyticsFilterData.formats = ['TWO_D', 'THREE_D', 'IMAX_2D', 'IMAX_3D', 'FOUR_DX']
+        .map(name => ({ id: name, name: name.replace('_', ' ') }));
+    analyticsFilterData.languages = ['ENGLISH', 'TAMIL', 'HINDI', 'TELUGU', 'KANNADA', 'MALAYALAM']
+        .map(name => ({ id: name, name: name }));
+
+    analyticsFilterData.movies = [];
+    analyticsFilterData.theatres = [];
+    analyticsFilterData.screens = [];
+    analyticsFilterData.cities = [];
+
+    populateSelect('filterFormat', analyticsFilterData.formats, 'All Formats', 'No formats available');
+    populateSelect('filterLanguage', analyticsFilterData.languages, 'All Languages', 'No languages available');
+    populateSelect('filterCity', [], 'All Cities', 'Could not be loaded');
+    populateSelect('filterMovie', [], 'All Movies', 'Could not be loaded');
+
+    reloadAnalyticsCascade();
+
+    // The cascade labels an empty list as "none in this city", which would be
+    // misleading when the real reason is that the request failed.
+    populateSelect('filterTheatre', [], 'All Theatres', 'Could not be loaded');
+    populateSelect('filterScreen', [], 'All Screens', 'Could not be loaded');
 }
 
 // ==================== FILTER BAR NOTICES ====================
