@@ -1,9 +1,13 @@
 package com.moviebooking.admin.service;
 
 import java.time.LocalDateTime;
+import java.util.Arrays;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -39,6 +43,7 @@ import com.moviebooking.admin.dto.AdminDTOs.TierPriceResponse;
 import com.moviebooking.auth.entity.User;
 import com.moviebooking.auth.repository.UserRepository;
 import com.moviebooking.booking.dto.BookingDTOs.BookingResponse;
+import com.moviebooking.catalog.model.AudioLanguage;
 import com.moviebooking.catalog.model.City;
 import com.moviebooking.catalog.model.Movie;
 import com.moviebooking.catalog.model.MovieFormat;
@@ -174,10 +179,10 @@ public class AdminService {
         // admin UI sent languages/formats that never reached the database and
         // the movie table then crashed on undefined.join().
         if (req.availableLanguages() != null) {
-            movie.setAvailableLanguages(new LinkedHashSet<>(req.availableLanguages()));
+            movie.setAvailableLanguages(new LinkedHashSet<>(parseLanguages(req.availableLanguages())));
         }
         if (req.availableFormats() != null) {
-            movie.setAvailableFormats(new LinkedHashSet<>(req.availableFormats()));
+            movie.setAvailableFormats(new LinkedHashSet<>(parseFormats(req.availableFormats())));
         }
         return mapToMovieResponse(movieRepository.save(movie));
     }
@@ -212,11 +217,11 @@ public class AdminService {
         // so merging would make removing a language impossible.
         if (req.availableLanguages() != null) {
             m.getAvailableLanguages().clear();
-            m.getAvailableLanguages().addAll(req.availableLanguages());
+            m.getAvailableLanguages().addAll(parseLanguages(req.availableLanguages()));
         }
         if (req.availableFormats() != null) {
             m.getAvailableFormats().clear();
-            m.getAvailableFormats().addAll(req.availableFormats());
+            m.getAvailableFormats().addAll(parseFormats(req.availableFormats()));
         }
         return mapToMovieResponse(movieRepository.save(m));
     }
@@ -250,6 +255,85 @@ public class AdminService {
                 m.getPosterUrl(), m.getBannerUrl(), m.getReleaseDate(),
                 languages, formats
         );
+    }
+
+    // ==================== MOVIE METADATA PARSING ====================
+    //
+    // Languages and formats are typed as free text in the admin UI, and the labels
+    // people naturally use ("2D", "IMAX 3D") are not the enum constant names
+    // (TWO_D, IMAX_3D). Both spellings are accepted and stored canonically. Anything
+    // else is rejected with a message that lists what is accepted, so the operator
+    // is never left guessing — before this, an unsupported value failed inside
+    // Jackson and reached the UI as a bare 500 "Something went wrong".
+
+    private static final String ACCEPTED_LANGUAGES = Arrays.stream(AudioLanguage.values())
+            .map(Enum::name)
+            .collect(Collectors.joining(", "));
+
+    private static final Map<String, MovieFormat> FORMAT_BY_KEY = buildFormatKeys();
+
+    private static Map<String, MovieFormat> buildFormatKeys() {
+        Map<String, MovieFormat> keys = new LinkedHashMap<>();
+        for (MovieFormat format : MovieFormat.values()) {
+            keys.put(normalizeMetadataKey(format.name()), format);
+            keys.put(normalizeMetadataKey(format.getValue()), format);
+        }
+        return keys;
+    }
+
+    private static String normalizeMetadataKey(String raw) {
+        return raw == null ? "" : raw.trim().toUpperCase(Locale.ROOT).replaceAll("[\s-]+", "_");
+    }
+
+    /**
+     * @return null when the request omitted languages entirely, so an update leaves
+     *         the existing set alone instead of clearing it.
+     */
+    private Set<AudioLanguage> parseLanguages(Set<String> raw) {
+        if (raw == null) return null;
+        Set<AudioLanguage> parsed = new LinkedHashSet<>();
+        for (String value : raw) {
+            String key = normalizeMetadataKey(value);
+            if (key.isEmpty()) continue;   // tolerate a trailing comma in the text box
+            AudioLanguage match = null;
+            for (AudioLanguage candidate : AudioLanguage.values()) {
+                if (candidate.name().equals(key)) {
+                    match = candidate;
+                    break;
+                }
+            }
+            if (match == null) {
+                throw new BusinessException("'" + value.trim()
+                        + "' is not a supported audio language. Accepted languages: "
+                        + ACCEPTED_LANGUAGES + ".");
+            }
+            parsed.add(match);
+        }
+        return parsed;
+    }
+
+    /** @return null when the request omitted formats entirely. */
+    private Set<MovieFormat> parseFormats(Set<String> raw) {
+        if (raw == null) return null;
+        Set<MovieFormat> parsed = new LinkedHashSet<>();
+        for (String value : raw) {
+            String key = normalizeMetadataKey(value);
+            if (key.isEmpty()) continue;
+            MovieFormat match = FORMAT_BY_KEY.get(key);
+            if (match == null) {
+                throw new BusinessException("'" + value.trim()
+                        + "' is not a supported format. Accepted formats: "
+                        + describeAcceptedFormats() + ".");
+            }
+            parsed.add(match);
+        }
+        return parsed;
+    }
+
+    private static String describeAcceptedFormats() {
+        return Arrays.stream(MovieFormat.values())
+                .map(f -> f.name() + " (" + f.getValue() + ")")
+                .collect(Collectors.joining(", "));
     }
 
     // --- THEATRES & SCREENS ---

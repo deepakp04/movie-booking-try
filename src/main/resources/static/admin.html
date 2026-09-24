@@ -7,7 +7,7 @@
     <link rel="stylesheet" href="/admin.css">
     <link rel="stylesheet" href="/css/analytics.css">
 </head>
-<body>
+<body data-portal="ADMIN">
 
     <!-- Top Admin Bar -->
     <header class="admin-navbar">
@@ -65,7 +65,15 @@
 
                     <!-- City Table List -->
                     <div class="admin-card">
-                        <h3>Existing Cities</h3>
+                        <div style="display:flex; justify-content:space-between; align-items:flex-end; flex-wrap:wrap; gap:12px; margin-bottom:10px;">
+                            <h3 style="margin:0;">Existing Cities</h3>
+                            <div class="form-group" style="margin:0; flex:1; max-width:340px;">
+                                <label for="citySearch">Search</label>
+                                <input type="text" id="citySearch" placeholder="City or state"
+                                       oninput="applyCitySearch()">
+                            </div>
+                        </div>
+                        <p class="subtitle" id="cityCount" style="margin:0 0 10px 0;"></p>
                         <div class="table-wrapper">
                             <table class="data-table">
                                 <thead>
@@ -123,10 +131,12 @@
                             <div class="form-group">
                                 <label for="movieLanguages">Languages (Comma Separated)</label>
                                 <input type="text" id="movieLanguages" placeholder="English, Tamil, Hindi" required>
+                                <small style="color: var(--text-muted);">Accepted languages: English, Tamil, Hindi, Telugu, Kannada, Malayalam.</small>
                             </div>
                             <div class="form-group">
                                 <label for="movieFormats">Formats (Comma Separated)</label>
-                                <input type="text" id="movieFormats" placeholder="2D, 3D, IMAX 3D" required>
+                                <input type="text" id="movieFormats" placeholder="2D, 3D, IMAX 2D, IMAX 3D, 4DX" required>
+                                <small style="color: var(--text-muted);">Accepted formats: 2D, 3D, IMAX 2D, IMAX 3D, 4DX (also TWO_D, THREE_D, IMAX_2D, IMAX_3D, FOUR_DX).</small>
                             </div>
                             <div class="form-group">
                                 <label for="moviePoster">Poster Image URL</label>
@@ -150,11 +160,20 @@
 
                     <!-- Movies Table List -->
                     <div class="admin-card">
-                        <h3>Movie Database</h3>
+                        <div style="display:flex; justify-content:space-between; align-items:flex-end; flex-wrap:wrap; gap:12px; margin-bottom:10px;">
+                            <h3 style="margin:0;">Movie Database</h3>
+                            <div class="form-group" style="margin:0; flex:1; max-width:340px;">
+                                <label for="movieSearch">Search</label>
+                                <input type="text" id="movieSearch" placeholder="Movie ID, title or language"
+                                       oninput="applyMovieSearch()">
+                            </div>
+                        </div>
+                        <p class="subtitle" id="movieCount" style="margin:0 0 10px 0;"></p>
                         <div class="table-wrapper">
                             <table class="data-table">
                                 <thead>
                                     <tr>
+                                        <th>ID</th>
                                         <th>Poster</th>
                                         <th>Title</th>
                                         <th>CBFC</th>
@@ -345,7 +364,12 @@
                     <div class="admin-card">
                         <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
                             <h3 style="margin:0;">Scheduled Shows</h3>
-                            <div style="display:flex; align-items:center; gap:8px;">
+                            <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+                                <div class="form-group" style="margin:0;">
+                                    <label for="adminShowSearch" style="margin:0; font-size:0.8rem; color:var(--text-muted);">Search</label>
+                                    <input type="text" id="adminShowSearch" placeholder="Show ID, movie, screen or format"
+                                           oninput="applyAdminShowSearch()" style="width:220px;">
+                                </div>
                                 <label style="margin:0; font-size:0.8rem; color:var(--text-muted);">Show</label>
                                 <select id="showScopeSelect" onchange="loadShows()" style="width:auto;">
                                     <option value="upcoming" selected>Today &amp; upcoming</option>
@@ -354,6 +378,7 @@
                                 </select>
                             </div>
                         </div>
+                        <p class="subtitle" id="adminShowCount" style="margin:0 0 10px 0;"></p>
                         <div class="table-wrapper">
                             <table class="data-table">
                                 <thead>

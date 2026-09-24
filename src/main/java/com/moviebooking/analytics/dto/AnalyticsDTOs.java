@@ -230,6 +230,7 @@ public final class AnalyticsDTOs {
         List<FilterOption> screens,
         List<FilterOption> cities,
         List<FilterOption> formats,
-        List<FilterOption> languages
+        List<FilterOption> languages,
+        String notice
     ) {}
 }

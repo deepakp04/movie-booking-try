@@ -1,16 +1,21 @@
 package com.moviebooking.common.exception;
 
+import java.util.Arrays;
 import java.util.List;
+import java.util.stream.Collectors;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
+import com.fasterxml.jackson.databind.JsonMappingException;
+import com.fasterxml.jackson.databind.exc.InvalidFormatException;
 import com.moviebooking.common.response.ApiResponse;
 import com.moviebooking.common.response.ErrorResponse;
 
@@ -90,5 +95,51 @@ public class GlobalExceptionHandler {
         log.debug("Static resource not found: {}", ex.getMessage());
         ErrorResponse response = new ErrorResponse(false, "Resource not found", List.of());
         return ResponseEntity.status(HttpStatus.NOT_FOUND).body(response);
+    }
+
+    // A body that cannot be bound (an unsupported value for an enum field such as
+    // cbfcRating, or malformed JSON) is the client's mistake, not a server
+    // failure, and the reason is worth showing. This previously fell through to
+    // the catch-all and reached the portals as an opaque 500 "Something went
+    // wrong", which is precisely what made a mistyped movie format look like a
+    // crash instead of an explainable error.
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    public ResponseEntity<ErrorResponse> handleUnreadableBody(HttpMessageNotReadableException ex) {
+        String message = describeUnreadableBody(ex);
+        log.warn("Rejected request body: {}", message);
+        ErrorResponse response = new ErrorResponse(false, message, List.of());
+        return ResponseEntity.badRequest().body(response);
+    }
+
+    private String describeUnreadableBody(HttpMessageNotReadableException ex) {
+        Throwable cause = ex.getMostSpecificCause();
+
+        if (cause instanceof InvalidFormatException invalid) {
+            Class<?> target = invalid.getTargetType();
+            String field = lastFieldName(invalid);
+            String value = String.valueOf(invalid.getValue());
+
+            if (target != null && target.isEnum()) {
+                String accepted = Arrays.stream(target.getEnumConstants())
+                        .map(String::valueOf)
+                        .collect(Collectors.joining(", "));
+                return (field != null ? "'" + field + "'" : "A field")
+                        + " received '" + value + "', which is not a supported value. "
+                        + "Accepted values: " + accepted + ".";
+            }
+
+            if (field != null) {
+                return "'" + field + "' received '" + value
+                        + "', which is not a valid value for that field.";
+            }
+        }
+
+        return "The request body could not be read. Check the submitted values and try again.";
+    }
+
+    private String lastFieldName(InvalidFormatException ex) {
+        List<JsonMappingException.Reference> path = ex.getPath();
+        if (path == null || path.isEmpty()) return null;
+        return path.get(path.size() - 1).getFieldName();
     }
 }

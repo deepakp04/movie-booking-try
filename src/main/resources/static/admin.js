@@ -165,8 +165,6 @@ async function loadCities() {
     try {
         const res = await adminApiCall('/cities');
         if (!res) return;
-        const tbody = document.getElementById('citiesTableBody');
-        tbody.innerHTML = '';
 
         // Populate dropdowns across other forms as well
         const cityDropdowns = [
@@ -179,27 +177,61 @@ async function loadCities() {
 
         window.__cityCache = res.data;
         res.data.forEach(city => {
-            // Table row
-            tbody.innerHTML += `
-                <tr>
-                    <td>${city.id}</td>
-                    <td><strong>${city.name}</strong></td>
-                    <td>${city.state}</td>
-                    <td>
-                        <button class="btn-secondary-sm" onclick="editCity(${city.id})">✏️</button>
-                        <button class="btn-danger-sm" onclick="deleteCity(${city.id})">🗑️</button>
-                    </td>
-                </tr>
-            `;
-
-            // Dropdown options
             cityDropdowns.forEach(d => {
                 if (d) d.innerHTML += `<option value="${city.id}">${city.name}, ${city.state}</option>`;
             });
         });
+
+        // Drawn from the cache so the search box can filter without another request.
+        applyCitySearch();
     } catch (err) {
         console.error('[RENDER ERROR]', err);
         showAlert(`Something failed while rendering: ${err.message}`, 'error');
+    }
+}
+
+/** Draws the Manage Cities table for the rows it is given. */
+function renderCitiesTable(cities, emptyMessage) {
+    const tbody = document.getElementById('citiesTableBody');
+    if (!tbody) return;
+
+    tbody.innerHTML = '';
+    cities.forEach(city => {
+        tbody.innerHTML += `
+            <tr>
+                <td>${city.id}</td>
+                <td><strong>${city.name}</strong></td>
+                <td>${city.state}</td>
+                <td>
+                    <button class="btn-secondary-sm" onclick="editCity(${city.id})">✏️</button>
+                    <button class="btn-danger-sm" onclick="deleteCity(${city.id})">🗑️</button>
+                </td>
+            </tr>
+        `;
+    });
+
+    if (cities.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="4" style="color: var(--text-muted); font-style: italic;">${emptyMessage}</td></tr>`;
+    }
+}
+
+/** Called by the search box on the Manage Cities card. */
+function applyCitySearch() {
+    const all = window.__cityCache || [];
+    const term = (document.getElementById('citySearch')?.value || '').trim().toLowerCase();
+
+    const matches = !term ? all : all.filter(city =>
+        [city.id, city.name, city.state].filter(Boolean).join(' ').toLowerCase().includes(term));
+
+    renderCitiesTable(matches, term
+        ? 'No city matches that search. Clear the box to see them all.'
+        : 'No cities yet. Add one with the form.');
+
+    const countEl = document.getElementById('cityCount');
+    if (countEl) {
+        countEl.textContent = all.length === 0
+            ? ''
+            : (term ? `${matches.length} of ${all.length} cities match "${term}"` : `${all.length} city(s)`);
     }
 }
 
@@ -236,52 +268,105 @@ async function loadMovies() {
     try {
         const res = await adminApiCall('/movies');
         if (!res) return;
-        const tbody = document.getElementById('moviesTableBody');
         const movieSelect = document.getElementById('showMovieSelect');
-        
-        tbody.innerHTML = '';
+
         if (movieSelect) movieSelect.innerHTML = '<option value="" disabled selected>Select Movie</option>';
 
         window.__movieCache = res.data;
         res.data.forEach(movie => {
-            const langs = Array.isArray(movie.availableLanguages) && movie.availableLanguages.length
-                ? movie.availableLanguages.join(', ')
-                : '—';
-            tbody.innerHTML += `
-                <tr>
-                    <td><img src="${movie.posterUrl}" alt="poster" style="width: 40px; height: 60px; object-fit: cover; border-radius: 4px;"></td>
-                    <td><strong>${movie.title}</strong></td>
-                    <td>${movie.cbfcRating}</td>
-                    <td>${movie.durationMinutes}m</td>
-                    <td>${langs}</td>
-                    <td>
-                        <button class="btn-secondary-sm" onclick="editMovie(${movie.id})">✏️</button>
-                        <button class="btn-danger-sm" onclick="deleteMovie(${movie.id})">🗑️</button>
-                    </td>
-                </tr>
-            `;
-
             if (movieSelect) {
                 movieSelect.innerHTML += `<option value="${movie.id}">${movie.title} (${movie.cbfcRating})</option>`;
             }
         });
+
+        // Drawn from the cache so the search box filters without a new request.
+        applyMovieSearch();
     } catch (err) {
         console.error('[RENDER ERROR]', err);
         showAlert(`Something failed while rendering: ${err.message}`, 'error');
     }
 }
 
+/** Draws the Movie Library table for the rows it is given. */
+function renderMoviesTable(movies, emptyMessage) {
+    const tbody = document.getElementById('moviesTableBody');
+    if (!tbody) return;
+
+    tbody.innerHTML = '';
+    movies.forEach(movie => {
+        const langs = Array.isArray(movie.availableLanguages) && movie.availableLanguages.length
+            ? movie.availableLanguages.join(', ')
+            : '—';
+        tbody.innerHTML += `
+            <tr>
+                <td>#${movie.id}</td>
+                <td><img src="${movie.posterUrl}" alt="poster" style="width: 40px; height: 60px; object-fit: cover; border-radius: 4px;"></td>
+                <td><strong>${movie.title}</strong></td>
+                <td>${movie.cbfcRating}</td>
+                <td>${movie.durationMinutes}m</td>
+                <td>${langs}</td>
+                <td>
+                    <button class="btn-secondary-sm" onclick="editMovie(${movie.id})">✏️</button>
+                    <button class="btn-danger-sm" onclick="deleteMovie(${movie.id})">🗑️</button>
+                </td>
+            </tr>
+        `;
+    });
+
+    if (movies.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="7" style="color: var(--text-muted); font-style: italic;">${emptyMessage}</td></tr>`;
+    }
+}
+
+/** Called by the search box in the Movie Library card. */
+function applyMovieSearch() {
+    const all = window.__movieCache || [];
+    const term = (document.getElementById('movieSearch')?.value || '').trim().toLowerCase();
+
+    const matches = !term ? all : all.filter(movie => [
+        '#' + movie.id,
+        movie.title,
+        movie.cbfcRating,
+        (movie.availableLanguages || []).join(' '),
+        (movie.availableFormats || []).join(' ')
+    ].filter(Boolean).join(' ').toLowerCase().includes(term));
+
+    renderMoviesTable(matches, term
+        ? 'No movie matches that search. Clear the box to see them all.'
+        : 'No movies in the library yet. Add one with the form.');
+
+    const countEl = document.getElementById('movieCount');
+    if (countEl) {
+        countEl.textContent = all.length === 0
+            ? ''
+            : (term ? `${matches.length} of ${all.length} movies match "${term}"` : `${all.length} movie(s)`);
+    }
+}
+
 document.getElementById('addMovieForm')?.addEventListener('submit', async (e) => {
     e.preventDefault();
+    const languages = splitMovieMetadata(document.getElementById('movieLanguages').value);
+    const formats = splitMovieMetadata(document.getElementById('movieFormats').value);
+
+    // Validated before the request so an unsupported value is explained straight
+    // away instead of failing deeper down.
+    clearFieldErrors();
+    const metadataError = validateMovieMetadata(languages, formats);
+    if (metadataError) {
+        showAlert(metadataError.message, 'error');
+        markFieldError(metadataError.field, metadataError.message);
+        return;
+    }
+
     const payload = {
         title: document.getElementById('movieTitle').value,
         cbfcRating: document.getElementById('movieCbfc').value,
         durationMinutes: parseInt(document.getElementById('movieDuration').value),
         releaseDate: document.getElementById('movieRelease').value,
-        availableLanguages: document.getElementById('movieLanguages').value
-                .split(',').map(x => x.trim().toUpperCase()).filter(Boolean),
-        availableFormats: document.getElementById('movieFormats').value
-                .split(',').map(x => x.trim().toUpperCase().replace(/[\s-]+/g, '_')).filter(Boolean),
+        // Canonical enum names: the API stores TWO_D/IMAX_3D style values, so the
+        // labels the operator typed ("2D", "IMAX 3D") are converted here.
+        availableLanguages: languages.map(canonicalLanguage),
+        availableFormats: formats.map(canonicalFormat),
         posterUrl: document.getElementById('moviePoster').value,
         bannerUrl: document.getElementById('movieBanner').value,
         castMembers: document.getElementById('movieCast').value,
@@ -488,50 +573,91 @@ async function loadScreensForTheatre(theatreId) {
 }
 
 // --- 4. SHOW SCHEDULER ---
+// Last response, so the search box can filter without hitting the API on every
+// keystroke.
+let adminShowsCache = [];
+
 async function loadShows() {
     try {
         const scopeEl = document.getElementById('showScopeSelect');
         const scope = scopeEl ? scopeEl.value : 'upcoming';
         const res = await adminApiCall(`/shows?scope=${scope}`);
         if (!res) return;
-        const tbody = document.getElementById('showsTableBody');
-        tbody.innerHTML = '';
+        adminShowsCache = res.data || [];
 
-        const now = new Date();
-
-        res.data.forEach(s => {
-            const showDateTime = new Date(s.startTime);
-            
-            // Skip past shows for upcoming scope - they should only appear in "past" scope
-            if (scope === 'upcoming' && showDateTime <= now) {
-                return;
-            }
-            
-            // Skip future shows for past scope
-            if (scope === 'past' && showDateTime > now) {
-                return;
-            }
-
-            const dateStr = showDateTime.toLocaleString();
-            const isPast = showDateTime <= now;
-            
-            tbody.innerHTML += `
-                <tr>
-                    <td>#${s.id}</td>
-                    <td><strong>${s.movieTitle}</strong></td>
-                    <td>${s.theatreName} - ${s.screenName}</td>
-                    <td>${dateStr}</td>
-                    <td>₹${s.price} (${s.format})</td>
-                    <td>
-                        ${isPast ? '<span style="color: var(--text-muted);">Completed</span>' 
-                                 : `<button class="btn-danger-sm" onclick="deleteShow(${s.id})">Cancel</button>`}
-                    </td>
-                </tr>
-            `;
-        });
+        // Drawn from the cache so the search box filters without a new request.
+        applyAdminShowSearch();
     } catch (err) {
         console.error('[RENDER ERROR]', err);
         showAlert(`Something failed while rendering: ${err.message}`, 'error');
+    }
+}
+
+/** Called by the search box on the Scheduled Shows card. */
+function applyAdminShowSearch() {
+    renderAdminShows();
+}
+
+/** Draws the Scheduled Shows table for the current scope and search term. */
+function renderAdminShows() {
+    const tbody = document.getElementById('showsTableBody');
+    if (!tbody) return;
+
+    const scope = document.getElementById('showScopeSelect')?.value || 'upcoming';
+    const term = (document.getElementById('adminShowSearch')?.value || '').trim().toLowerCase();
+    const now = new Date();
+
+    tbody.innerHTML = '';
+    let shown = 0;
+
+    adminShowsCache.forEach(s => {
+        const showDateTime = new Date(s.startTime);
+        if (isNaN(showDateTime)) return;
+
+        // Skip past shows for upcoming scope - they should only appear in "past" scope
+        if (scope === 'upcoming' && showDateTime <= now) return;
+
+        // Skip future shows for past scope
+        if (scope === 'past' && showDateTime > now) return;
+
+        // Matches the columns on screen, including the Show ID.
+        if (term) {
+            const haystack = ['#' + s.id, s.movieTitle, s.theatreName, s.screenName, s.format]
+                .filter(Boolean).join(' ').toLowerCase();
+            if (!haystack.includes(term)) return;
+        }
+
+        shown++;
+        const dateStr = showDateTime.toLocaleString();
+        const isPast = showDateTime <= now;
+
+        tbody.innerHTML += `
+            <tr>
+                <td>#${s.id}</td>
+                <td><strong>${s.movieTitle}</strong></td>
+                <td>${s.theatreName} - ${s.screenName}</td>
+                <td>${dateStr}</td>
+                <td>₹${s.price} (${s.format})</td>
+                <td>
+                    ${isPast ? '<span style="color: var(--text-muted);">Completed</span>'
+                             : `<button class="btn-danger-sm" onclick="deleteShow(${s.id})">Cancel</button>`}
+                </td>
+            </tr>
+        `;
+    });
+
+    if (shown === 0) {
+        tbody.innerHTML = `<tr><td colspan="6" style="color: var(--text-muted); font-style: italic;">${
+            term ? 'No show matches that search. Clear the box to see them all.'
+                 : 'No shows to display for this scope.'
+        }</td></tr>`;
+    }
+
+    const countEl = document.getElementById('adminShowCount');
+    if (countEl) {
+        countEl.textContent = term
+            ? `${shown} show(s) match "${term}"`
+            : (shown ? `${shown} show(s)` : '');
     }
 }
 
@@ -826,20 +952,107 @@ async function deleteScreen(id) {
     } catch (err) { console.error('[DELETE SCREEN]', err); }
 }
 
+/* ===== Movie metadata validation =====
+   Languages and formats are typed as free text, and the labels people naturally
+   use ("2D", "IMAX 3D") are not the enum names the API stores (TWO_D, IMAX_3D).
+   Both spellings are accepted and sent canonically; anything else is reported
+   here with the accepted list, mirroring AdminService on the server. */
+
+const MOVIE_LANGUAGE_NAMES = ['ENGLISH', 'TAMIL', 'HINDI', 'TELUGU', 'KANNADA', 'MALAYALAM'];
+
+const MOVIE_FORMAT_ALIASES = {
+    '2D': 'TWO_D',
+    'TWO_D': 'TWO_D',
+    '3D': 'THREE_D',
+    'THREE_D': 'THREE_D',
+    'IMAX_2D': 'IMAX_2D',
+    'IMAX_3D': 'IMAX_3D',
+    '4DX': 'FOUR_DX',
+    'FOUR_DX': 'FOUR_DX'
+};
+
+const MOVIE_FORMAT_ACCEPTED =
+    'TWO_D (2D), THREE_D (3D), IMAX_2D (IMAX 2D), IMAX_3D (IMAX 3D), FOUR_DX (4DX)';
+
+/** Splits a comma separated text box into trimmed, non-empty tokens. */
+function splitMovieMetadata(raw) {
+    return String(raw || '').split(',').map(x => x.trim()).filter(Boolean);
+}
+
+function normalizeMovieToken(raw) {
+    return String(raw || '').trim().toUpperCase().replace(/[\s-]+/g, '_');
+}
+
+function canonicalLanguage(raw) {
+    const key = normalizeMovieToken(raw);
+    return MOVIE_LANGUAGE_NAMES.includes(key) ? key : null;
+}
+
+function canonicalFormat(raw) {
+    return MOVIE_FORMAT_ALIASES[normalizeMovieToken(raw)] || null;
+}
+
+/**
+ * Returns { field, message } for the first unsupported language or format, or null
+ * when everything can be stored. The message names the accepted values, so a typo is
+ * explained instead of surfacing as a vague failure.
+ */
+function validateMovieMetadata(languages, formats) {
+    const badLanguage = languages.find(l => !canonicalLanguage(l));
+    if (badLanguage) {
+        return {
+            field: 'movieLanguages',
+            message: `'${badLanguage}' is not a supported audio language. Accepted languages: ${MOVIE_LANGUAGE_NAMES.join(', ')}.`
+        };
+    }
+
+    const badFormat = formats.find(f => !canonicalFormat(f));
+    if (badFormat) {
+        return {
+            field: 'movieFormats',
+            message: `'${badFormat}' is not a supported format. Accepted formats: ${MOVIE_FORMAT_ACCEPTED}.`
+        };
+    }
+
+    return null;
+}
+
 async function editMovie(id) {
     const m = __find('__movieCache', id);
+
     const title = prompt('Movie title:', m.title || '');
     if (title === null) return;
+
     const durationMinutes = prompt('Duration (minutes):', m.durationMinutes || '');
     if (durationMinutes === null) return;
-    const langs = prompt('Languages (ENGLISH, TAMIL, HINDI, TELUGU, KANNADA, MALAYALAM):',
+
+    // This flow edits through prompts rather than a form, so the same check runs
+    // here before anything is sent.
+    const rawLanguages = prompt(
+        `Languages, comma separated (${MOVIE_LANGUAGE_NAMES.join(', ')}):`,
         (m.availableLanguages || []).join(', '));
-    if (langs === null) return;
+    if (rawLanguages === null) return;
+
+    const rawFormats = prompt(
+        `Formats, comma separated (${MOVIE_FORMAT_ACCEPTED}):`,
+        (m.availableFormats || []).join(', '));
+    if (rawFormats === null) return;
+
+    const languages = splitMovieMetadata(rawLanguages);
+    const formats = splitMovieMetadata(rawFormats);
+
+    const metadataError = validateMovieMetadata(languages, formats);
+    if (metadataError) {
+        showAlert(metadataError.message, 'error');
+        return;
+    }
+
     try {
         await adminApiCall(`/movies/${id}`, 'PUT', {
             title,
             durationMinutes: parseInt(durationMinutes, 10),
-            availableLanguages: langs.split(',').map(x => x.trim().toUpperCase()).filter(Boolean)
+            availableLanguages: languages.map(canonicalLanguage),
+            availableFormats: formats.map(canonicalFormat)
         });
         showAlert('Movie updated.', 'success');
         loadMovies();

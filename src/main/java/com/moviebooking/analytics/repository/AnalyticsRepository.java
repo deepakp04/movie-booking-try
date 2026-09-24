@@ -756,15 +756,36 @@ public class AnalyticsRepository {
             .map(r -> new FilterOption(toLong(r[0]), String.valueOf(r[1]), null))
             .toList();
 
-        List<FilterOption> formats = List.of(
+        List<FilterOption> formats = formatOptions();
+
+        List<FilterOption> languages = languageOptions();
+
+        return new FilterOptionsResponse(movies, theatres, screens, cities, formats, languages, null);
+    }
+
+    /**
+     * The filter bar for a scope that has no data behind it yet, such as an owner
+     * whose theatre has not been assigned. Format and language options mirror the
+     * enums, so they are still offered; everything else is empty and the caller
+     * supplies the explanation shown above the dropdowns.
+     */
+    public FilterOptionsResponse emptyScopeFilterOptions(String notice) {
+        return new FilterOptionsResponse(List.of(), List.of(), List.of(), List.of(),
+                formatOptions(), languageOptions(), notice);
+    }
+
+    static List<FilterOption> formatOptions() {
+        return List.of(
             new FilterOption(null, "TWO_D", null),
             new FilterOption(null, "THREE_D", null),
             new FilterOption(null, "IMAX_2D", null),
             new FilterOption(null, "IMAX_3D", null),
             new FilterOption(null, "FOUR_DX", null)
         );
+    }
 
-        List<FilterOption> languages = List.of(
+    static List<FilterOption> languageOptions() {
+        return List.of(
             new FilterOption(null, "ENGLISH", null),
             new FilterOption(null, "TAMIL", null),
             new FilterOption(null, "HINDI", null),
@@ -772,8 +793,6 @@ public class AnalyticsRepository {
             new FilterOption(null, "KANNADA", null),
             new FilterOption(null, "MALAYALAM", null)
         );
-
-        return new FilterOptionsResponse(movies, theatres, screens, cities, formats, languages);
     }
 
     // ==================== UTILITY ====================

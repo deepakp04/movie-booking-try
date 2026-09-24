@@ -145,7 +145,15 @@ public class AnalyticsService {
     // ==================== FILTER OPTIONS ====================
 
     public FilterOptionsResponse getFilterOptions() {
-        Long theatreId = resolveTheatreScope();
-        return repo.getFilterOptions(theatreId);
+        try {
+            return repo.getFilterOptions(resolveTheatreScope());
+        } catch (ResourceNotFoundException e) {
+            // An owner whose theatre assignment is missing still gets a usable filter
+            // bar: the format and language options come from the enums rather than the
+            // database, so they can be offered alongside an explanation. Throwing here
+            // is what left the owner with empty dropdowns and only an error to show.
+            return repo.emptyScopeFilterOptions(e.getMessage()
+                    + " Analytics will stay empty until an admin assigns a theatre to your account.");
+        }
     }
 }

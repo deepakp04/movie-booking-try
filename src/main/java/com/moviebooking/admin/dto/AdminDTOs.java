@@ -25,8 +25,8 @@ public class AdminDTOs {
         String posterUrl,
         String bannerUrl,
         LocalDate releaseDate,
-        java.util.Set<AudioLanguage> availableLanguages,
-        java.util.Set<MovieFormat> availableFormats
+        java.util.Set<String> availableLanguages,
+        java.util.Set<String> availableFormats
     ) {}
 
     public record MovieUpdateRequest(
@@ -39,8 +39,8 @@ public class AdminDTOs {
         String posterUrl,
         String bannerUrl,
         LocalDate releaseDate,
-        java.util.Set<AudioLanguage> availableLanguages,
-        java.util.Set<MovieFormat> availableFormats
+        java.util.Set<String> availableLanguages,
+        java.util.Set<String> availableFormats
     ) {}
 
     // Flat view of a Movie. availableLanguages/availableFormats are LAZY

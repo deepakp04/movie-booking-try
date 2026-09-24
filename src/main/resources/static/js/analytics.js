@@ -4,11 +4,98 @@
  * This file handles all Chart.js rendering and filter interactions.
  */
 
-// Detect which portal we're in (admin vs owner)
-const ANALYTICS_API_BASE = (function() {
-    if (window.location.pathname.includes('owner')) return '/api/owner/analytics';
+/**
+ * Which analytics API this page talks to. Each portal declares itself on
+ * <body data-portal="...">, so the analytics bar can never call the *other*
+ * portal's endpoints: a theatre owner hitting /api/admin/analytics/** is rejected
+ * by Spring Security, and that is exactly how "HTTP 403 while loading filter
+ * options" used to appear while the rest of the owner page worked fine.
+ * The pathname is only a fallback for a page that does not declare itself.
+ */
+function resolveAnalyticsApiBase() {
+    const declared = String(
+        (document.body && document.body.dataset && document.body.dataset.portal) ||
+        window.ANALYTICS_PORTAL || ''
+    ).toUpperCase();
+
+    if (declared.includes('OWNER')) return '/api/owner/analytics';
+    if (declared.includes('ADMIN')) return '/api/admin/analytics';
+
+    const path = String(window.location.pathname || '').toLowerCase();
+    if (path.includes('owner')) return '/api/owner/analytics';
+    if (path.includes('admin')) return '/api/admin/analytics';
+
+    console.warn('[ANALYTICS] Portal could not be detected; defaulting to admin analytics.');
     return '/api/admin/analytics';
-})();
+}
+
+const ANALYTICS_API_BASE = resolveAnalyticsApiBase();
+console.log('[ANALYTICS] Using API base', ANALYTICS_API_BASE);
+
+/**
+ * Renews the 15 minute access token from the stored refresh token. Returns true
+ * only when a new access token was stored. Nothing in the portals used to call
+ * /auth/refresh-token, so a session older than 15 minutes looked like a 403.
+ */
+async function refreshAccessToken() {
+    const refreshToken = localStorage.getItem('refreshToken');
+    if (!refreshToken) return false;
+
+    try {
+        const res = await fetch('/auth/refresh-token', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ refreshToken })
+        });
+        if (!res.ok) return false;
+
+        const result = await res.json();
+        const data = result && result.data;
+        if (!data || !data.accessToken) return false;
+
+        localStorage.setItem('accessToken', data.accessToken);
+        if (data.refreshToken) localStorage.setItem('refreshToken', data.refreshToken);
+        console.log('[ANALYTICS] Access token refreshed');
+        return true;
+    } catch (err) {
+        console.warn('[ANALYTICS] Token refresh failed:', err);
+        return false;
+    }
+}
+
+/**
+ * Fetches an analytics endpoint with the bearer token, retrying once after a
+ * silent token refresh when the server answers 401. Resolves with both the
+ * response and the URL that was requested, so a failure can name it.
+ */
+async function analyticsFetch(endpoint) {
+    const url = `${ANALYTICS_API_BASE}${endpoint}`;
+    const withToken = () => fetch(url, {
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('accessToken')}` }
+    });
+
+    let res = await withToken();
+    if (res.status === 401 && await refreshAccessToken()) {
+        res = await withToken();
+    }
+    return { res, url };
+}
+
+/**
+ * The message a rejected request deserves. A rejection carries no useful body, so
+ * the status and the URL are the only evidence there is; naming both is what turns
+ * an opaque "HTTP 403" into something actionable.
+ */
+function describeFetchFailure(url, status, fallback) {
+    if (status === 401) {
+        return url + ' answered 401 (unauthorized): your session has expired. Sign in again.';
+    }
+    if (status === 403) {
+        return url + ' answered 403 (forbidden): this account cannot load analytics for this '
+             + 'portal. Sign in with a theatre-owner or admin account.';
+    }
+    return fallback || (url + ' answered HTTP ' + status + '.');
+}
 
 // Chart instances (for cleanup on re-render)
 const charts = {};
@@ -57,22 +144,23 @@ let analyticsFilterData = {
 
 async function loadFilterOptions() {
     try {
-        const token = localStorage.getItem('accessToken');
-        const res = await fetch(`${ANALYTICS_API_BASE}/filters`, {
-            headers: { 'Authorization': `Bearer ${token}` }
-        });
+        const { res, url } = await analyticsFetch('/filters');
 
         let result = null;
         try {
             result = await res.json();
         } catch (parseErr) {
-            throw new Error(`HTTP ${res.status} while loading filter options`);
+            // Nothing parsable came back (Spring Security rejects with an empty body).
+            throw new Error(describeFetchFailure(url, res.status,
+                url + ' returned HTTP ' + res.status + ' while loading filter options.'));
         }
 
         // Previously this returned silently, which left every dropdown on the bar
-        // looking broken (no options at all). A failure is now reported.
+        // looking broken (no options at all). A failure is now reported, naming the
+        // URL that failed so a wrong API base is obvious.
         if (!res.ok || !result || result.success === false || !result.data) {
-            throw new Error((result && result.message) || `HTTP ${res.status} while loading filter options`);
+            throw new Error((result && result.message) || describeFetchFailure(url, res.status,
+                url + ' returned HTTP ' + res.status + ' while loading filter options.'));
         }
 
         const f = result.data;
@@ -93,6 +181,7 @@ async function loadFilterOptions() {
         reloadAnalyticsCascade();
 
         analyticsNotices.filters = '';
+        analyticsNotices.info = f.notice || '';
         renderAnalyticsNotices();
         return true;
     } catch (err) {
@@ -109,7 +198,7 @@ async function loadFilterOptions() {
 // load, and a backwards date range — and they must be able to be shown at the
 // same time without one wiping the other.
 
-const analyticsNotices = { filters: '', dates: '' };
+const analyticsNotices = { filters: '', dates: '', info: '' };
 
 function renderAnalyticsNotices() {
     const box = document.getElementById('analyticsFilterError');
@@ -117,6 +206,7 @@ function renderAnalyticsNotices() {
 
     box.innerHTML = '';
     const parts = [];
+    if (analyticsNotices.info) parts.push('ℹ️ ' + analyticsNotices.info);
     if (analyticsNotices.filters) parts.push('⚠️ ' + analyticsNotices.filters);
     if (analyticsNotices.dates) parts.push('⚠️ ' + analyticsNotices.dates);
 
@@ -283,19 +373,11 @@ async function applyFilters() {
 // ==================== API HELPER ====================
 
 async function analyticsApiCall(endpoint) {
-    const token = localStorage.getItem('accessToken');
     const qs = buildQueryString();
     const separator = endpoint.includes('?') ? '&' : '?';
-    const url = `${ANALYTICS_API_BASE}${endpoint}${qs ? separator + qs : ''}`;
 
-    const res = await fetch(url, {
-        headers: { 'Authorization': `Bearer ${token}` }
-    });
-
-    if (res.status === 401 || res.status === 403) {
-        console.warn(`[ANALYTICS] ${endpoint} returned ${res.status} — unauthorized`);
-        return null;
-    }
+    // Same token handling as the filter bar: one silent refresh attempt on 401.
+    const { res, url } = await analyticsFetch(endpoint + (qs ? separator + qs : ''));
 
     if (!res.ok) {
         const errBody = await res.text();

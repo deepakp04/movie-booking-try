@@ -240,7 +240,7 @@ function renderMyShows(scope) {
         // Free-text search across the columns the owner actually sees, so a long
         // schedule stays workable without scrolling every row.
         if (term) {
-            const haystack = [s.movieTitle, s.screenName, s.format, s.language]
+            const haystack = ['#' + s.id, s.movieTitle, s.screenName, s.format, s.language]
                 .filter(Boolean).join(' ').toLowerCase();
             if (!haystack.includes(term)) return;
         }
@@ -251,6 +251,7 @@ function renderMyShows(scope) {
 
         tbody.innerHTML += `
             <tr>
+                <td>#${s.id}</td>
                 <td>${s.movieTitle || ''}</td>
                 <td>${s.screenName || ''}</td>
                 <td>${start}</td>
@@ -265,7 +266,7 @@ function renderMyShows(scope) {
     });
 
     if (shown === 0) {
-        tbody.innerHTML = `<tr><td colspan="6" style="color: var(--text-muted); font-style: italic;">${
+        tbody.innerHTML = `<tr><td colspan="7" style="color: var(--text-muted); font-style: italic;">${
             term ? 'No show matches that search. Clear the box to see them all.'
                  : 'No shows to display for this scope.'
         }</td></tr>`;
