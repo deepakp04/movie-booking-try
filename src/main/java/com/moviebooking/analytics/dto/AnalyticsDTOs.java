@@ -24,6 +24,7 @@ public final class AnalyticsDTOs {
         Long theatreId,
         Long screenId,
         Long cityId,
+        String state,
         String format,
         String language
     ) {
@@ -221,7 +222,10 @@ public final class AnalyticsDTOs {
         String name,
         // Parent id used by the UI to cascade city -> theatre -> screen.
         // Null for options that have no parent (movies, formats, languages, cities).
-        Long parentId
+        Long parentId,
+        // State, populated for city options only, so the filter bar can narrow
+        // the city dropdown by state before a city is picked. Null elsewhere.
+        String state
     ) {}
 
     public record FilterOptionsResponse(

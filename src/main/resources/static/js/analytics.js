@@ -108,6 +108,7 @@ let currentFilter = {
     theatreId: null,
     screenId: null,
     cityId: null,
+    state: null,
     format: null,
     language: null
 };
@@ -287,22 +288,42 @@ function populateSelect(elementId, items, defaultLabel, emptyLabel) {
 }
 
 /**
- * City -> Theatre -> Screen for the analytics bar. Selecting a city narrows the
- * theatre list, selecting a theatre narrows the screens, and anything that is no
- * longer reachable is dropped instead of being sent to the API.
+ * State -> City -> Theatre -> Screen for the analytics bar. Picking a state
+ * narrows the city list, a city narrows the theatres, a theatre narrows the
+ * screens, and anything no longer reachable is dropped instead of being sent.
  */
 function reloadAnalyticsCascade() {
+    const stateEl = document.getElementById('filterState');
     const cityEl = document.getElementById('filterCity');
     const theatreEl = document.getElementById('filterTheatre');
     const screenEl = document.getElementById('filterScreen');
     const data = analyticsFilterData;
 
+    const state = stateEl ? stateEl.value : '';
+    const cityIdsInState = state
+        ? new Set(data.cities.filter(c => c.state === state).map(c => String(c.id)))
+        : null;
+
+    // Re-apply the state narrowing, but leave an empty city list alone when no
+    // state is picked so populateStaticFilterOptions() keeps its failure label.
+    if (cityEl && cityIdsInState) {
+        const previousCity = cityEl.value;
+        const cities = data.cities.filter(c => cityIdsInState.has(String(c.id)));
+        populateSelect('filterCity', cities, 'All Cities', 'No cities with shows in this state');
+        if (!cities.some(c => String(c.id) === String(previousCity))) cityEl.value = '';
+    }
+
     const cityId = cityEl ? cityEl.value : '';
 
     if (theatreEl) {
         const previousTheatre = theatreEl.value;
-        const theatres = data.theatres.filter(t => !cityId || String(t.parentId) === String(cityId));
-        populateSelect('filterTheatre', theatres, 'All Theatres', 'No theatres in this city');
+        const theatres = data.theatres.filter(t => {
+            if (cityId) return String(t.parentId) === String(cityId);
+            if (cityIdsInState) return cityIdsInState.has(String(t.parentId));
+            return true;
+        });
+        populateSelect('filterTheatre', theatres, 'All Theatres',
+            cityId ? 'No theatres in this city' : 'No theatres match');
         if (!theatres.some(t => String(t.id) === String(previousTheatre))) {
             theatreEl.value = '';
         }
@@ -310,23 +331,41 @@ function reloadAnalyticsCascade() {
 
     if (screenEl) {
         const effectiveTheatre = theatreEl ? theatreEl.value : '';
-        const theatresInCity = cityId
+        const theatresInScope = cityId
             ? new Set(data.theatres.filter(t => String(t.parentId) === String(cityId)).map(t => String(t.id)))
-            : null;
+            : (cityIdsInState
+                ? new Set(data.theatres.filter(t => cityIdsInState.has(String(t.parentId))).map(t => String(t.id)))
+                : null);
 
         const screens = data.screens.filter(s => {
             if (effectiveTheatre) return String(s.parentId) === String(effectiveTheatre);
-            if (theatresInCity) return theatresInCity.has(String(s.parentId));
+            if (theatresInScope) return theatresInScope.has(String(s.parentId));
             return true;
         });
         populateSelect('filterScreen', screens, 'All Screens', 'No screens match');
     }
 }
 
-/** Called by the City / Theatre selects in the markup. */
+/** Called by the State / City / Theatre selects in the markup. */
 function onAnalyticsFilterChange(changed) {
+    const stateEl = document.getElementById('filterState');
+    const cityEl = document.getElementById('filterCity');
     const theatreEl = document.getElementById('filterTheatre');
     const screenEl = document.getElementById('filterScreen');
+
+    if (changed === 'state') {
+        // Narrow the city list to the state (or widen it back to all cities),
+        // then drop any child selection that is no longer reachable.
+        if (cityEl) {
+            const state = stateEl ? stateEl.value : '';
+            const cities = analyticsFilterData.cities.filter(c => !state || c.state === state);
+            populateSelect('filterCity', cities, 'All Cities',
+                state ? 'No cities with shows in this state' : 'No cities with shows yet');
+            cityEl.value = '';
+        }
+        if (theatreEl) theatreEl.value = '';
+        if (screenEl) screenEl.value = '';
+    }
     if (changed === 'city' && theatreEl) theatreEl.value = '';
     if ((changed === 'city' || changed === 'theatre') && screenEl) screenEl.value = '';
     reloadAnalyticsCascade();
@@ -366,6 +405,7 @@ function collectFilters() {
     currentFilter.theatreId = document.getElementById('filterTheatre')?.value || null;
     currentFilter.screenId = document.getElementById('filterScreen')?.value || null;
     currentFilter.cityId = document.getElementById('filterCity')?.value || null;
+    currentFilter.state = document.getElementById('filterState')?.value || null;
     currentFilter.format = document.getElementById('filterFormat')?.value || null;
     currentFilter.language = document.getElementById('filterLanguage')?.value || null;
 }
@@ -378,6 +418,7 @@ function buildQueryString() {
     if (currentFilter.theatreId) params.set('theatreId', currentFilter.theatreId);
     if (currentFilter.screenId) params.set('screenId', currentFilter.screenId);
     if (currentFilter.cityId) params.set('cityId', currentFilter.cityId);
+    if (currentFilter.state) params.set('state', currentFilter.state);
     if (currentFilter.format) params.set('format', currentFilter.format);
     if (currentFilter.language) params.set('language', currentFilter.language);
     return params.toString();

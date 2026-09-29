@@ -1,7 +1,61 @@
 const API_BASE = '/api/admin';
 
+// Predefined list of Indian states/UTs — the single source behind every
+// "markdown" state dropdown on this portal (selects marked data-state-select).
+const INDIA_STATES = [
+    'Andaman and Nicobar Islands',
+    'Andhra Pradesh',
+    'Arunachal Pradesh',
+    'Assam',
+    'Bihar',
+    'Chandigarh',
+    'Chhattisgarh',
+    'Dadra and Nagar Haveli and Daman and Diu',
+    'Delhi',
+    'Goa',
+    'Gujarat',
+    'Haryana',
+    'Himachal Pradesh',
+    'Jammu and Kashmir',
+    'Jharkhand',
+    'Karnataka',
+    'Kerala',
+    'Ladakh',
+    'Lakshadweep',
+    'Madhya Pradesh',
+    'Maharashtra',
+    'Manipur',
+    'Meghalaya',
+    'Mizoram',
+    'Nagaland',
+    'Odisha',
+    'Puducherry',
+    'Punjab',
+    'Rajasthan',
+    'Sikkim',
+    'Tamil Nadu',
+    'Telangana',
+    'Tripura',
+    'Uttar Pradesh',
+    'Uttarakhand',
+    'West Bengal'
+];
+
+// Fills every state dropdown marked data-state-select with the same placeholder
+// plus INDIA_STATES, so all state options stay identical by construction.
+function fillStateSelects() {
+    document.querySelectorAll('select[data-state-select]').forEach(sel => {
+        const placeholder = sel.getAttribute('data-placeholder') || 'Select State';
+        const current = sel.value;
+        sel.innerHTML = `<option value="">${placeholder}</option>`
+            + INDIA_STATES.map(s => `<option value="${s}">${s}</option>`).join('');
+        if (INDIA_STATES.includes(current)) sel.value = current;
+    });
+}
+
 // Initialize and verify authentication on boot
 document.addEventListener('DOMContentLoaded', () => {
+    fillStateSelects();
     if (checkAdminAuth()) {
         loadCities();
         loadMovies();
@@ -166,21 +220,12 @@ async function loadCities() {
         const res = await adminApiCall('/cities');
         if (!res) return;
 
-        // Populate dropdowns across other forms as well
-        const cityDropdowns = [
-            document.getElementById('theatreCitySelect'),
-            document.getElementById('showCitySelect')
-        ];
-        cityDropdowns.forEach(d => {
-            if (d) d.innerHTML = '<option value="" disabled selected>Select City</option>';
-        });
-
         window.__cityCache = res.data;
-        res.data.forEach(city => {
-            cityDropdowns.forEach(d => {
-                if (d) d.innerHTML += `<option value="${city.id}">${city.name}, ${city.state}</option>`;
-            });
-        });
+
+        // Register Theatre narrows its city list by state; the Schedule Shows
+        // city list only appears after a state is picked.
+        refreshTheatreLocationSelects();
+        fillShowCityOptions(true);
 
         // Drawn from the cache so the search box can filter without another request.
         applyCitySearch();
@@ -235,15 +280,80 @@ function applyCitySearch() {
     }
 }
 
+// Common city names per state/UT, used to pre-fill suggestions in the
+// Manage Cities form. Purely optional: the admin may type any city name.
+const STATE_CITY_SUGGESTIONS = {
+    'Andaman and Nicobar Islands': ['Port Blair', 'Car Nicobar', 'Mayabunder', 'Rangat', 'Diglipur', 'Havelock Island (Swaraj Dweep)', 'Neil Island (Shaheed Dweep)', 'Long Island', 'Little Andaman'],
+    'Andhra Pradesh': ['Visakhapatnam', 'Vijayawada', 'Guntur', 'Nellore', 'Kurnool', 'Tirupati', 'Rajahmundry', 'Kakinada', 'Kadapa', 'Anantapur', 'Eluru', 'Ongole', 'Srikakulam', 'Vizianagaram', 'Machilipatnam', 'Chittoor', 'Hindupur', 'Narasaraopet', 'Tadipatri', 'Proddatur', 'Tenali', 'Bhimavaram', 'Madanapalle', 'Adoni', 'Amalapuram', 'Tadepalligudem', 'Chilakaluripet'],
+    'Arunachal Pradesh': ['Itanagar', 'Naharlagun', 'Pasighat', 'Tawang', 'Ziro', 'Bomdila', 'Tezu', 'Roing', 'Aalo', 'Changlang', 'Seppa', 'Yingkiong', 'Anini', 'Mebo', 'Namsai'],
+    'Assam': ['Guwahati', 'Silchar', 'Dibrugarh', 'Jorhat', 'Nagaon', 'Tinsukia', 'Tezpur', 'Bongaigaon', 'Dhubri', 'Diphu', 'North Lakhimpur', 'Karimganj', 'Sivasagar', 'Goalpara', 'Barpeta', 'Nalbari', 'Morigaon', 'Hojai', 'Lumding', 'Dergaon'],
+    'Bihar': ['Patna', 'Gaya', 'Bhagalpur', 'Muzaffarpur', 'Darbhanga', 'Purnia', 'Arrah', 'Begusarai', 'Katihar', 'Chhapra', 'Danapur', 'Bihar Sharif', 'Hajipur', 'Sasaram', 'Dehri', 'Siwan', 'Motihari', 'Bettiah', 'Bagaha', 'Jamalpur', 'Jehanabad', 'Aurangabad', 'Lakhisarai', 'Madhubani'],
+    'Chandigarh': ['Chandigarh'],
+    'Chhattisgarh': ['Raipur', 'Bhilai', 'Bilaspur', 'Korba', 'Durg', 'Rajnandgaon', 'Jagdalpur', 'Raigarh', 'Ambikapur', 'Dhamtari', 'Mahasamund', 'Bhatapara', 'Kawardha', 'Sakti', 'Janjgir', 'Baloda Bazar', 'Gariaband', 'Surajpur', 'Chirmiri', 'Mungeli'],
+    'Dadra and Nagar Haveli and Daman and Diu': ['Daman', 'Diu', 'Silvassa'],
+    'Delhi': ['New Delhi', 'Dwarka', 'Rohini', 'Karol Bagh', 'Saket', 'Lajpat Nagar', 'Pitampura', 'Janakpuri', 'Mayur Vihar', 'Vasant Kunj'],
+    'Goa': ['Panaji', 'Margao', 'Vasco da Gama', 'Mapusa', 'Ponda', 'Bicholim', 'Curchorem', 'Canacona', 'Valpoi', 'Cuncolim', 'Quepem', 'Sanquelim', 'Pernem', 'Saligao'],
+    'Gujarat': ['Ahmedabad', 'Surat', 'Vadodara', 'Rajkot', 'Bhavnagar', 'Jamnagar', 'Gandhinagar', 'Junagadh', 'Anand', 'Nadiad', 'Morbi', 'Mehsana', 'Bharuch', 'Vapi', 'Navsari', 'Porbandar', 'Gandhidham', 'Bhuj', 'Surendranagar', 'Botad', 'Devbhoomi Dwarka', 'Valsad', 'Palanpur', 'Himmatnagar', 'Veraval', 'Godhra', 'Anjar', 'Khambhat', 'Petlad'],
+    'Haryana': ['Gurugram', 'Faridabad', 'Panipat', 'Ambala', 'Yamunanagar', 'Rohtak', 'Hisar', 'Karnal', 'Sonipat', 'Panchkula', 'Bhiwani', 'Sirsa', 'Bahadurgarh', 'Rewari', 'Kurukshetra', 'Jind', 'Narnaul', 'Kaithal', 'Tohana', 'Assandh'],
+    'Himachal Pradesh': ['Shimla', 'Mandi', 'Solan', 'Dharamshala', 'Baddi', 'Nahan', 'Paonta Sahib', 'Sundarnagar', 'Kullu', 'Hamirpur', 'Una', 'Bilaspur', 'Chamba', 'Dalhousie', 'Manali', 'Nalagarh', 'Parwanoo', 'Palampur', 'Rampur', 'Rohru'],
+    'Jammu and Kashmir': ['Srinagar', 'Jammu', 'Anantnag', 'Baramulla', 'Udhampur', 'Kathua', 'Sopore', 'Pulwama', 'Rajouri', 'Poonch', 'Doda', 'Kupwara', 'Bandipora', 'Ganderbal', 'Shopian', 'Reasi', 'Ramban', 'Kishtwar', 'Budgam'],
+    'Jharkhand': ['Ranchi', 'Jamshedpur', 'Dhanbad', 'Bokaro Steel City', 'Deoghar', 'Hazaribagh', 'Giridih', 'Ramgarh', 'Phusro', 'Dumka', 'Chaibasa', 'Simdega', 'Khunti', 'Lohardaga', 'Palamu', 'Sahibganj', 'Madhupur', 'Chatra', 'Koderma', 'Jamtara'],
+    'Karnataka': ['Bengaluru', 'Mysuru', 'Hubballi', 'Mangaluru', 'Belagavi', 'Davanagere', 'Ballari', 'Vijayapura', 'Kalaburagi', 'Shivamogga', 'Tumakuru', 'Udupi', 'Hassan', 'Mandya', 'Raichur', 'Bidar', 'Gadag', 'Karwar', 'Kolar', 'Chikkamagaluru', 'Hospet', 'Robertsonpet', 'Bagalkote', 'Ramanagara', 'Chitradurga', 'Haveri', 'Yadgir', 'Chamarajanagar', 'Nanjangud', 'Sirsi'],
+    'Kerala': ['Thiruvananthapuram', 'Kochi', 'Kozhikode', 'Thrissur', 'Kollam', 'Alappuzha', 'Kannur', 'Palakkad', 'Kottayam', 'Malappuram', 'Kasaragod', 'Pathanamthitta', 'Idukki', 'Vadakara', 'Kayamkulam', 'Guruvayur', 'Tirur', 'Perumbavoor', 'Aluva', 'Chalakudy', 'Adoor', 'Punalur', 'Nilambur'],
+    'Ladakh': ['Leh', 'Kargil', 'Nubra', 'Zanskar', 'Padum', 'Hemis', 'Diskit'],
+    'Lakshadweep': ['Kavaratti', 'Agatti', 'Minicoy', 'Andrott', 'Bitra', 'Chetlat', 'Kadmat', 'Amini'],
+    'Madhya Pradesh': ['Bhopal', 'Indore', 'Jabalpur', 'Gwalior', 'Ujjain', 'Sagar', 'Dewas', 'Satna', 'Ratlam', 'Rewa', 'Katni', 'Singrauli', 'Burhanpur', 'Khandwa', 'Chhindwara', 'Guna', 'Shivpuri', 'Vidisha', 'Chhatarpur', 'Damoh', 'Mandsaur', 'Neemuch', 'Pithampur', 'Morena', 'Bhind', 'Barwani', 'Rajgarh'],
+    'Maharashtra': ['Mumbai', 'Pune', 'Nagpur', 'Thane', 'Nashik', 'Aurangabad', 'Solapur', 'Kolhapur', 'Amravati', 'Nanded', 'Sangli', 'Jalgaon', 'Akola', 'Latur', 'Ahmednagar', 'Dhule', 'Chandrapur', 'Navi Mumbai', 'Panvel', 'Kalyan', 'Ichalkaranji', 'Bhusawal', 'Parbhani', 'Satara', 'Wardha', 'Yavatmal', 'Baramati', 'Gondia', 'Beed', 'Osmanabad', 'Ratnagiri', 'Malegaon', 'Nandurbar'],
+    'Manipur': ['Imphal', 'Thoubal', 'Bishnupur', 'Churachandpur', 'Ukhrul', 'Senapati', 'Kakching', 'Jiribam', 'Moreh', 'Kangpokpi', 'Chandel', 'Tamenglong'],
+    'Meghalaya': ['Shillong', 'Tura', 'Jowai', 'Nongstoin', 'Baghmara', 'Williamnagar', 'Dawki', 'Mairang', 'Resubelpara', 'Ampati'],
+    'Mizoram': ['Aizawl', 'Lunglei', 'Champhai', 'Serchhip', 'Kolasib', 'Saiha', 'Lawngtlai', 'Mamit', 'Khawzawl', 'Saitual'],
+    'Nagaland': ['Kohima', 'Dimapur', 'Mokokchung', 'Tuensang', 'Wokha', 'Zunheboto', 'Mon', 'Kiphire', 'Longleng', 'Peren', 'Phek'],
+    'Odisha': ['Bhubaneswar', 'Cuttack', 'Rourkela', 'Berhampur', 'Sambalpur', 'Puri', 'Balasore', 'Baripada', 'Bhadrak', 'Jharsuguda', 'Angul', 'Dhenkanal', 'Kendrapara', 'Rayagada', 'Kalahandi', 'Jeypore', 'Bargarh', 'Bhawanipatna', 'Sundargarh', 'Jajpur'],
+    'Puducherry': ['Puducherry', 'Karaikal', 'Mahe', 'Yanam'],
+    'Punjab': ['Ludhiana', 'Amritsar', 'Jalandhar', 'Patiala', 'Bathinda', 'Mohali', 'Hoshiarpur', 'Pathankot', 'Moga', 'Batala', 'Firozpur', 'Sangrur', 'Phagwara', 'Malerkotla', 'Abohar', 'Muktsar', 'Barnala', 'Rupnagar', 'Kapurthala', 'Gurdaspur', 'Khanna'],
+    'Rajasthan': ['Jaipur', 'Jodhpur', 'Udaipur', 'Kota', 'Bikaner', 'Ajmer', 'Bhilwara', 'Alwar', 'Sikar', 'Bharatpur', 'Pali', 'Sri Ganganagar', 'Tonk', 'Kishangarh', 'Beawar', 'Chittorgarh', 'Jaisalmer', 'Banswara', 'Baran', 'Dausa', 'Nagaur', 'Jhunjhunu', 'Sirohi', 'Hanumangarh'],
+    'Sikkim': ['Gangtok', 'Namchi', 'Gyalshing', 'Mangan', 'Rangpo', 'Singtam', 'Ravangla', 'Lachung', 'Lachen', 'Jorethang'],
+    'Tamil Nadu': ['Chennai', 'Coimbatore', 'Madurai', 'Tiruchirappalli', 'Salem', 'Tirunelveli', 'Tiruppur', 'Erode', 'Vellore', 'Thoothukudi', 'Thanjavur', 'Dindigul', 'Hosur', 'Kanchipuram', 'Nagercoil', 'Sivakasi', 'Karur', 'Namakkal', 'Kumbakonam', 'Cuddalore', 'Neyveli', 'Ambur', 'Virudhunagar', 'Ramanathapuram', 'Palani', 'Theni', 'Perambalur', 'Krishnagiri', 'Dharmapuri', 'Nagapattinam', 'Thiruvarur', 'Pudukkottai', 'Sivaganga', 'Tiruvannamalai', 'Villupuram', 'Tirupattur', 'Udhagamandalam', 'Coonoor', 'Yercaud', 'Arakkonam'],
+    'Telangana': ['Hyderabad', 'Warangal', 'Nizamabad', 'Karimnagar', 'Khammam', 'Ramagundam', 'Mahbubnagar', 'Nalgonda', 'Adilabad', 'Siddipet', 'Suryapet', 'Miryalaguda', 'Jagtial', 'Mancherial', 'Kothagudem', 'Sangareddy', 'Jangaon', 'Gadwal', 'Wanaparthy', 'Vemulawada'],
+    'Tripura': ['Agartala', 'Udaipur', 'Dharmanagar', 'Kailashahar', 'Belonia', 'Ambassa', 'Khowai', 'Teliamura', 'Sonamura', 'Amarpur'],
+    'Uttar Pradesh': ['Lucknow', 'Kanpur', 'Ghaziabad', 'Agra', 'Varanasi', 'Meerut', 'Prayagraj', 'Bareilly', 'Aligarh', 'Moradabad', 'Saharanpur', 'Gorakhpur', 'Noida', 'Firozabad', 'Jhansi', 'Muzaffarnagar', 'Mathura', 'Ayodhya', 'Rampur', 'Shahjahanpur', 'Farrukhabad', 'Mau', 'Mirzapur', 'Bulandshahr', 'Etawah', 'Bhind', 'Azamgarh', 'Bijnor', 'Deoria', 'Barabanki', 'Unnao', 'Rae Bareli', 'Hapur', 'Sitapur', 'Etah', 'Hardoi'],
+    'Uttarakhand': ['Dehradun', 'Haridwar', 'Roorkee', 'Haldwani', 'Rudrapur', 'Kashipur', 'Rishikesh', 'Nainital', 'Almora', 'Pithoragarh', 'Mussoorie', 'Badrinath', 'Kedarnath', 'Gopeshwar', 'Chamoli', 'Bageshwar', 'Kichha', 'Vikasnagar', 'Doiwala'],
+    'West Bengal': ['Kolkata', 'Howrah', 'Asansol', 'Siliguri', 'Durgapur', 'Bardhaman', 'Malda', 'Kharagpur', 'Haldia', 'Darjeeling', 'Jalpaiguri', 'Baharampur', 'Krishnanagar', 'Shantipur', 'Balurghat', 'Purulia', 'Bankura', 'Jangipur', 'Bishnupur', 'Cooch Behar']
+};
+
+/** Refills the City Name suggestions for the currently selected state. */
+function onCityStateChange() {
+    const state = (document.getElementById('cityState')?.value || '').trim();
+    const list = document.getElementById('cityNameList');
+    if (!list) return;
+
+    list.innerHTML = '';
+    (STATE_CITY_SUGGESTIONS[state] || []).forEach(city => {
+        const opt = document.createElement('option');
+        opt.value = city;
+        list.appendChild(opt);
+    });
+}
+
 document.getElementById('addCityForm')?.addEventListener('submit', async (e) => {
     e.preventDefault();
     const name = document.getElementById('cityName').value.trim();
     const state = document.getElementById('cityState').value.trim();
 
+    if (!state) {
+        showAlert('Please select a state first.', 'error');
+        return;
+    }
+    if (!name) {
+        showAlert('Please enter a city name.', 'error');
+        return;
+    }
+
     try {
         await adminApiCall('/cities', 'POST', { name, state });
         showAlert('City added successfully!', 'success');
         document.getElementById('addCityForm').reset();
+        onCityStateChange(); // suggestions follow the state, which is now cleared
         loadCities();
     } catch (err) {
         console.error('[RENDER ERROR]', err);
@@ -396,22 +506,155 @@ async function deleteMovie(id) {
     }
 }
 
+// ===== State-first location cascades (Register Theatre, Add Screen, Shows) =====
+
+/** Register Theatre: states come only from cities that already exist. */
+function refreshTheatreLocationSelects() {
+    const stateSel = document.getElementById('theatreStateSelect');
+    const citySel = document.getElementById('theatreCitySelect');
+    if (!stateSel || !citySel) return;
+
+    const states = [...new Set((window.__cityCache || []).map(c => c.state).filter(Boolean))]
+        .sort((a, b) => a.localeCompare(b));
+
+    stateSel.innerHTML = '<option value="" disabled selected>Select State</option>'
+        + states.map(s => `<option value="${s}">${s}</option>`).join('');
+    citySel.innerHTML = '<option value="" disabled selected>Select State First</option>';
+}
+
+/** Narrows the Register Theatre city list to the picked state. */
+function onTheatreStateChange() {
+    const state = document.getElementById('theatreStateSelect')?.value || '';
+    const citySel = document.getElementById('theatreCitySelect');
+    if (!citySel) return;
+
+    if (!state) {
+        citySel.innerHTML = '<option value="" disabled selected>Select State First</option>';
+        return;
+    }
+
+    const cities = (window.__cityCache || [])
+        .filter(c => c.state === state)
+        .sort((a, b) => a.name.localeCompare(b.name));
+
+    citySel.innerHTML = '<option value="" disabled selected>Select City</option>'
+        + cities.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+}
+
+/** Add Screen: only states and cities that have at least one registered theatre. */
+function refreshScreenLocationSelects() {
+    const stateSel = document.getElementById('screenStateSelect');
+    const citySel = document.getElementById('screenCitySelect');
+    const thSel = document.getElementById('screenTheatreSelect');
+    if (!stateSel || !citySel || !thSel) return;
+
+    const theatres = window.__theatreCache || [];
+    const cityById = new Map((window.__cityCache || []).map(c => [c.id, c]));
+
+    if (theatres.length === 0) {
+        stateSel.innerHTML = '<option value="" disabled selected>No theatres registered yet</option>';
+        citySel.innerHTML = '<option value="" disabled selected>Select State First</option>';
+        thSel.innerHTML = '<option value="" disabled selected>Select City First</option>';
+        return;
+    }
+
+    const states = [...new Set(theatres
+        .map(t => cityById.get(t.cityId)?.state)
+        .filter(Boolean))].sort((a, b) => a.localeCompare(b));
+
+    stateSel.innerHTML = '<option value="" disabled selected>Select State</option>'
+        + states.map(s => `<option value="${s}">${s}</option>`).join('');
+    citySel.innerHTML = '<option value="" disabled selected>Select State First</option>';
+    thSel.innerHTML = '<option value="" disabled selected>Select City First</option>';
+}
+
+/** Narrows the Add Screen city list to the state that was picked. */
+function onScreenStateChange() {
+    const state = document.getElementById('screenStateSelect')?.value || '';
+    const citySel = document.getElementById('screenCitySelect');
+    const thSel = document.getElementById('screenTheatreSelect');
+    if (!citySel || !thSel) return;
+
+    const cityById = new Map((window.__cityCache || []).map(c => [c.id, c]));
+    const cityIds = new Set((window.__theatreCache || [])
+        .filter(t => cityById.get(t.cityId)?.state === state)
+        .map(t => t.cityId));
+
+    const cities = [...cityIds]
+        .map(id => cityById.get(id))
+        .filter(Boolean)
+        .sort((a, b) => a.name.localeCompare(b.name));
+
+    citySel.innerHTML = '<option value="" disabled selected>Select City</option>'
+        + cities.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+    thSel.innerHTML = '<option value="" disabled selected>Select City First</option>';
+}
+
+/** Narrows the Add Screen theatre list to the picked state + city. */
+function onScreenCityChange() {
+    const cityId = parseInt(document.getElementById('screenCitySelect')?.value, 10);
+    const thSel = document.getElementById('screenTheatreSelect');
+    if (!thSel) return;
+
+    const theatres = (window.__theatreCache || [])
+        .filter(t => t.cityId === cityId)
+        .sort((a, b) => a.name.localeCompare(b.name));
+
+    thSel.innerHTML = '<option value="" disabled selected>Select Theatre</option>'
+        + theatres.map(t => `<option value="${t.id}">${t.name}</option>`).join('');
+}
+
+/** Returns the theatre's Google Maps link only when it is a safe http(s) URL. */
+function safeMapsHref(link) {
+    const raw = String(link || '').trim();
+    const ok = raw.startsWith('http://') || raw.startsWith('https://');
+    return ok && !raw.includes('"') && !raw.includes("'") ? raw : '';
+}
+
+/** Schedule Shows city list: cities of the picked state; state is required first. */
+function fillShowCityOptions(preserve) {
+    const stateSel = document.getElementById('showStateSelect');
+    const citySel = document.getElementById('showCitySelect');
+    if (!citySel) return;
+    const state = stateSel ? stateSel.value : '';
+    const previous = preserve ? citySel.value : '';
+
+    if (!state) {
+        citySel.innerHTML = '<option value="" disabled selected>Select State First</option>';
+        return;
+    }
+
+    const cities = (window.__cityCache || [])
+        .filter(c => c.state === state)
+        .sort((a, b) => a.name.localeCompare(b.name));
+
+    citySel.innerHTML = '<option value="" disabled selected>Select City</option>'
+        + cities.map(c => `<option value="${c.id}">${c.name}, ${c.state}</option>`).join('');
+    citySel.value = cities.some(c => String(c.id) === String(previous)) ? previous : '';
+}
+
+/** State is the required first step on the Schedule Shows form. */
+function onShowStateChange() {
+    fillShowCityOptions(false);
+    // The downstream selects do not fire onchange when they are reset in code.
+    const theatreSel = document.getElementById('showTheatreSelect');
+    if (theatreSel) theatreSel.innerHTML = '<option value="" disabled selected>Select Theatre First</option>';
+    const screenSel = document.getElementById('showScreenSelect');
+    if (screenSel) screenSel.innerHTML = '<option value="" disabled selected>Select Screen First</option>';
+    renderShowTierPriceInputs([]);
+    clearFieldErrors();
+}
+
 // --- 3. THEATRES & SCREENS MANAGEMENT ---
 async function loadTheatres() {
     try {
         const res = await adminApiCall('/theatres');
         if (!res) return;
         const container = document.getElementById('theatresListContainer');
-        const screenTheatreSelect = document.getElementById('screenTheatreSelect');
 
         container.innerHTML = '';
-        if (screenTheatreSelect) screenTheatreSelect.innerHTML = '<option value="" disabled selected>Select Theatre</option>';
 
         res.data.forEach(t => {
-            if (screenTheatreSelect) {
-                screenTheatreSelect.innerHTML += `<option value="${t.id}">${t.name} (${t.cityName})</option>`;
-            }
-
 			const screenListHtml = t.screens && t.screens.length > 0 
 			    ? t.screens.map(s => `
 			        <li style="margin-top: 8px; color: var(--text-muted); display: flex; justify-content: space-between; align-items: center;">
@@ -440,7 +683,7 @@ async function loadTheatres() {
                             <button class="btn-danger-sm" onclick="deleteTheatre(${t.id})">🗑️ Delete</button>
                         </span>
                     </div>
-                    <div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 4px;">${t.address}</div>
+                    <div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 4px;">${t.address}${safeMapsHref(t.mapsLink) ? ` <a href="${safeMapsHref(t.mapsLink)}" target="_blank" rel="noopener noreferrer" style="color: var(--primary-gold);">📍 Map</a>` : ''}</div>
                     <div style="font-size: 0.8rem; margin-top: 8px; display: flex; justify-content: space-between; align-items: center;">
                         ${ownerHtml}
                     </div>
@@ -452,6 +695,9 @@ async function loadTheatres() {
         });
 
         window.__theatreCache = res.data;
+
+        // Rebuild the Add Screen state/city/theatre cascade from the same data.
+        refreshScreenLocationSelects();
 
         // Feed the Maintenance tab's theatre picker from the same data.
         if (typeof mtPopulateTheatres === 'function') mtPopulateTheatres();
@@ -496,34 +742,100 @@ async function unassignOwner(theatreId) {
 
 document.getElementById('addTheatreForm')?.addEventListener('submit', async (e) => {
     e.preventDefault();
-    const cityIdRaw = document.getElementById('theatreCitySelect').value;
-    const name = document.getElementById('theatreName').value.trim();
-    const address = document.getElementById('theatreAddress').value.trim();
+    await withSubmitGuard(e.currentTarget, async () => {
+        const state = document.getElementById('theatreStateSelect').value;
+        const cityIdRaw = document.getElementById('theatreCitySelect').value;
+        const name = document.getElementById('theatreName').value.trim();
+        const address = document.getElementById('theatreAddress').value.trim();
+        const mapsLink = document.getElementById('theatreMapsLink').value.trim();
+        const ownerName = document.getElementById('theatreOwnerName').value.trim();
+        const ownerEmail = document.getElementById('theatreOwnerEmail').value.trim();
+        const ownerPassword = document.getElementById('theatreOwnerPassword').value;
 
-    if (!cityIdRaw) {
-        showAlert('Please select a city.', 'error');
-        return;
-    }
+        if (!state) {
+            const msg = 'State is required first: pick a state, then its city.';
+            showAlert(msg, 'error');
+            markFieldError('theatreStateSelect', msg);
+            return;
+        }
+        if (!cityIdRaw) {
+            showAlert('Please select a city for the chosen state.', 'error');
+            return;
+        }
+        if (!name) {
+            showAlert('Please enter the theatre name.', 'error');
+            return;
+        }
+        if (!address) {
+            showAlert('Please enter the theatre address.', 'error');
+            return;
+        }
+        if (mapsLink && !(mapsLink.startsWith('http://') || mapsLink.startsWith('https://'))) {
+            showAlert('The Google Maps link must start with http:// or https://.', 'error');
+            return;
+        }
+        const ownerFilled = [ownerName, ownerEmail, ownerPassword]
+            .filter(x => String(x || '').trim() !== '').length;
+        if (ownerFilled > 0 && ownerFilled < 3) {
+            showAlert('Fill all three owner fields (name, email, password), or leave them all blank.', 'error');
+            return;
+        }
 
-    const cityId = parseInt(cityIdRaw, 10); // Convert string "1" to integer 1
-
-    try {
-        await adminApiCall('/theatres', 'POST', { cityId, name, address });
-        showAlert('Theatre registered successfully!', 'success');
-        document.getElementById('addTheatreForm').reset();
-        loadTheatres();
-    } catch (err) {
-        // The retry-with-nested-city fallback that used to live here re-POSTed on
-        // ANY error, so a request that succeeded server-side but threw on the
-        // client produced two theatres. Removed.
-        console.error('[THEATRE CREATE FAILED]', err);
-    }
+        const cityId = parseInt(cityIdRaw, 10);
+        let created = false;
+        try {
+            const res = await adminApiCall('/theatres', 'POST',
+                { cityId, name, address, mapsLink: mapsLink || null });
+            created = true;
+            if (ownerFilled === 3 && res && res.data) {
+                await adminApiCall(`/theatres/${res.data.id}/owner`, 'POST', {
+                    name: ownerName, email: ownerEmail, password: ownerPassword
+                });
+                showAlert('Theatre registered and owner assigned. Share the owner credentials with them.', 'success');
+            } else {
+                showAlert('Theatre registered successfully!', 'success');
+            }
+            document.getElementById('addTheatreForm').reset();
+            clearFieldErrors();
+            onTheatreStateChange(); // city list follows the cleared state
+            loadTheatres();
+        } catch (err) {
+            // adminApiCall already showed the server's message. Never re-POST: a
+            // request that succeeded server-side but threw here used to create
+            // duplicate theatres.
+            console.error('[THEATRE CREATE FAILED]', err);
+            if (created) {
+                showAlert('Theatre created, but the owner could not be assigned. Use "Assign Owner" on the theatre card to retry.', 'error');
+            }
+        }
+    });
 });
 document.getElementById('addScreenForm')?.addEventListener('submit', async (e) => {
     e.preventDefault();
     await withSubmitGuard(e.currentTarget, async () => {
+        const state = document.getElementById('screenStateSelect').value;
+        const cityId = document.getElementById('screenCitySelect').value;
         const theatreId = document.getElementById('screenTheatreSelect').value;
         const name = document.getElementById('screenName').value;
+
+        if (!state) {
+            const msg = 'State is required first: pick a state, then its city and theatre.';
+            showAlert(msg, 'error');
+            markFieldError('screenStateSelect', msg);
+            return;
+        }
+        if (!cityId) {
+            showAlert('Please select a city for the chosen state.', 'error');
+            return;
+        }
+        if (!theatreId) {
+            showAlert('Please select a theatre.', 'error');
+            return;
+        }
+        if (!name.trim()) {
+            showAlert('Please enter the screen name.', 'error');
+            return;
+        }
 
         try {
             await adminApiCall(`/theatres/${theatreId}/screens`, 'POST', { name, totalSeats: 0 });
@@ -664,6 +976,21 @@ function renderAdminShows() {
 document.getElementById('addShowForm')?.addEventListener('submit', async (e) => {
     e.preventDefault();
     await withSubmitGuard(e.currentTarget, async () => {
+        const stateVal = document.getElementById('showStateSelect')?.value || '';
+        const cityVal = document.getElementById('showCitySelect')?.value || '';
+        if (!stateVal) {
+            const msg = 'State is required first: pick a state, then its city, theatre and screen.';
+            showAlert(msg, 'error');
+            markFieldError('showStateSelect', msg);
+            return;
+        }
+        if (!cityVal) {
+            const msg = 'Select a city — cities appear once a state is picked.';
+            showAlert(msg, 'error');
+            markFieldError('showCitySelect', msg);
+            return;
+        }
+
         // Field names must match the backend ShowRequest record exactly:
         // basePrice (not price), language + hasCaptions are required.
         const payload = {
@@ -912,8 +1239,10 @@ async function editTheatre(id) {
     if (name === null) return;
     const address = prompt('Address:', t.address || '');
     if (address === null) return;
+    const mapsLink = prompt('Google Maps link (leave blank to remove):', t.mapsLink || '');
+    if (mapsLink === null) return;
     try {
-        await adminApiCall(`/theatres/${id}`, 'PUT', { name, address });
+        await adminApiCall(`/theatres/${id}`, 'PUT', { name, address, mapsLink: mapsLink.trim() });
         showAlert('Theatre updated.', 'success');
         loadTheatres();
     } catch (err) { console.error('[EDIT THEATRE]', err); }
@@ -1061,10 +1390,10 @@ async function editMovie(id) {
 
 async function editCity(id) {
     const c = __find('__cityCache', id);
-    const name = prompt('City name:', c.name || '');
-    if (name === null) return;
     const state = prompt('State:', c.state || '');
     if (state === null) return;
+    const name = prompt('City name:', c.name || '');
+    if (name === null) return;
     try {
         await adminApiCall(`/cities/${id}`, 'PUT', { name, state });
         showAlert('City updated.', 'success');
@@ -1093,15 +1422,29 @@ let mtPainting = false;
  * are already loaded, so no extra request is needed and the list can never
  * contain a city with no theatres behind it.
  */
+function mtStateValue() {
+    return document.getElementById('mtStateSelect')?.value || '';
+}
+
 function mtPopulateCities() {
     const sel = document.getElementById('mtCitySelect');
     if (!sel) return;
     const previous = sel.value;
+    const state = mtStateValue();
 
+    // State is the required first step: no state, no city list.
+    if (!state) {
+        sel.innerHTML = '<option value="" disabled selected>Select State First</option>';
+        sel.value = '';
+        return;
+    }
+
+    const cityState = new Map((window.__cityCache || []).map(c => [String(c.id), c.state]));
     const seen = new Set();
     const cities = [];
     (window.__theatreCache || []).forEach(t => {
-        if (t.cityId && !seen.has(String(t.cityId))) {
+        if (t.cityId && !seen.has(String(t.cityId))
+            && cityState.get(String(t.cityId)) === state) {
             seen.add(String(t.cityId));
             cities.push({ id: t.cityId, name: t.cityName || ('City #' + t.cityId) });
         }
@@ -1126,15 +1469,28 @@ function mtPopulateCities() {
 function mtNarrowTheatresByCity() {
     const sel = document.getElementById('mtTheatreSelect');
     if (!sel) return;
+    const previous = sel.value;
+    const state = mtStateValue();
+
+    // State first: theatres only appear once a state is chosen.
+    if (!state) {
+        sel.innerHTML = '<option value="" disabled selected>Select State First</option>';
+        sel.value = '';
+        return;
+    }
+
     const cityEl = document.getElementById('mtCitySelect');
     const cityId = cityEl ? cityEl.value : '';
-    const previous = sel.value;
+    const cityState = new Map((window.__cityCache || []).map(c => [String(c.id), c.state]));
 
     const theatres = (window.__theatreCache || [])
+        .filter(t => cityState.get(String(t.cityId)) === state)
         .filter(t => !cityId || String(t.cityId) === String(cityId));
 
     sel.innerHTML = `<option value="" disabled selected>${
-        (cityId && theatres.length === 0) ? 'No theatres in this city' : 'Select Theatre'
+        (cityId && theatres.length === 0) ? 'No theatres in this city'
+        : (!cityId && theatres.length === 0) ? 'No theatres in this state'
+        : 'Select Theatre'
     }</option>`;
     theatres.forEach(t => {
         const o = document.createElement('option');
@@ -1150,6 +1506,14 @@ function mtOnCityChange() {
     mtNarrowTheatresByCity();
     // Rebuild the screen list (and reset the panels) for whatever theatre the
     // narrowed list now has selected — or for none, if it was dropped.
+    mtOnTheatreChange();
+}
+
+/** State is the required first step of the Maintenance tab. */
+function mtOnStateChange() {
+    clearFieldErrors();
+    mtPopulateCities();
+    mtNarrowTheatresByCity();
     mtOnTheatreChange();
 }
 
@@ -1289,7 +1653,8 @@ function mtRenderTierTable() {
 }
 
 async function mtCreateTier() {
-    if (!mtScreenId) return;
+    if (!mtScreenId) {
+$msg    }
     const name = document.getElementById('mtTierName').value.trim();
     if (!name) { showAlert('Tier name is required.', 'error'); return; }
     try {
@@ -1358,6 +1723,8 @@ function mtRenderPalette() {
 }
 
 function mtBuildGrid() {
+    if (!mtScreenId) {
+$msg    }
     const rows = parseInt(document.getElementById('mtRows').value, 10) || 0;
     const cols = parseInt(document.getElementById('mtCols').value, 10) || 0;
     if (rows < 1 || cols < 1) { showAlert('Rows and columns must be at least 1.', 'error'); return; }
@@ -1435,7 +1802,8 @@ function mtPaint(r, c) {
 }
 
 async function mtSaveLayout() {
-    if (!mtScreenId) return;
+    if (!mtScreenId) {
+$msg    }
     if (!mtGrid.length) { showAlert('Build a grid first.', 'error'); return; }
     if (!mtTiers.length) { showAlert('Add at least one seat tier first.', 'error'); return; }
 

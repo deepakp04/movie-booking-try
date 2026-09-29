@@ -122,10 +122,14 @@ public class CatalogService {
             List<ShowTimeResponse> showTimes = entry.getValue().stream()
                     .map(this::toShowTimeResponse).collect(Collectors.toList());
 
+            City city = theatre.getCity();
             response.add(new TheatreShowResponse(
                     theatre.getId(),
                     theatre.getName(),
                     theatre.getAddress(),
+                    city != null ? city.getName() : "",
+                    city != null ? city.getState() : "",
+                    theatre.getMapsLink(),
                     showTimes
             ));
         }

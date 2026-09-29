@@ -194,6 +194,28 @@
         </div>
     </div>
 
+    <!-- Theatre info side slider: map preview, click opens Google Maps -->
+    <div id="theatreInfoSlider" class="info-slider" aria-hidden="true">
+        <div class="info-slider-backdrop" onclick="closeTheatreInfo()"></div>
+        <aside class="info-slider-panel" role="dialog" aria-modal="true" aria-labelledby="tiName">
+            <div class="info-slider-header">
+                <div>
+                    <h3 id="tiName">Theatre</h3>
+                    <p id="tiAddress" class="info-slider-address"></p>
+                </div>
+                <button class="btn btn-secondary btn-sm" onclick="closeTheatreInfo()" aria-label="Close theatre info">✕</button>
+            </div>
+            <div class="info-map-frame">
+                <iframe id="tiMap" title="Theatre location" loading="lazy" referrerpolicy="no-referrer-when-downgrade"></iframe>
+                <button class="info-map-overlay" id="tiMapOverlay" type="button">
+                    <span>📍 Click the map to open Google Maps</span>
+                </button>
+            </div>
+            <a id="tiOpenMaps" class="btn btn-primary info-slider-cta" target="_blank" rel="noopener noreferrer">Open in Google Maps ↗</a>
+        </aside>
+    </div>
+
     <script src="/js/catalog.js"></script>
+
 </body>
 </html>

@@ -27,11 +27,12 @@ public class AdminAnalyticsController {
             @RequestParam(required = false) Long theatreId,
             @RequestParam(required = false) Long screenId,
             @RequestParam(required = false) Long cityId,
+            @RequestParam(required = false) String state,
             @RequestParam(required = false) String format,
             @RequestParam(required = false) String language) {
 
         return new ApiResponse<>(true, "Dashboard retrieved",
-            analyticsService.getDashboard(toFilter(dateFrom, dateTo, movieId, theatreId, screenId, cityId, format, language)));
+            analyticsService.getDashboard(toFilter(dateFrom, dateTo, movieId, theatreId, screenId, cityId, state, format, language)));
     }
 
     @GetMapping("/revenue")
@@ -42,12 +43,13 @@ public class AdminAnalyticsController {
             @RequestParam(required = false) Long theatreId,
             @RequestParam(required = false) Long screenId,
             @RequestParam(required = false) Long cityId,
+            @RequestParam(required = false) String state,
             @RequestParam(required = false) String format,
             @RequestParam(required = false) String language,
             @RequestParam(required = false, defaultValue = "daily") String granularity) {
 
         return new ApiResponse<>(true, "Revenue trend retrieved",
-            analyticsService.getRevenueTrend(toFilter(dateFrom, dateTo, movieId, theatreId, screenId, cityId, format, language), granularity));
+            analyticsService.getRevenueTrend(toFilter(dateFrom, dateTo, movieId, theatreId, screenId, cityId, state, format, language), granularity));
     }
 
     @GetMapping("/revenue/breakdown")
@@ -58,12 +60,13 @@ public class AdminAnalyticsController {
             @RequestParam(required = false) Long theatreId,
             @RequestParam(required = false) Long screenId,
             @RequestParam(required = false) Long cityId,
+            @RequestParam(required = false) String state,
             @RequestParam(required = false) String format,
             @RequestParam(required = false) String language,
             @RequestParam(required = false, defaultValue = "movie") String dimension) {
 
         return new ApiResponse<>(true, "Revenue breakdown retrieved",
-            analyticsService.getRevenueByDimension(toFilter(dateFrom, dateTo, movieId, theatreId, screenId, cityId, format, language), dimension));
+            analyticsService.getRevenueByDimension(toFilter(dateFrom, dateTo, movieId, theatreId, screenId, cityId, state, format, language), dimension));
     }
 
     @GetMapping("/movies")
@@ -74,11 +77,12 @@ public class AdminAnalyticsController {
             @RequestParam(required = false) Long theatreId,
             @RequestParam(required = false) Long screenId,
             @RequestParam(required = false) Long cityId,
+            @RequestParam(required = false) String state,
             @RequestParam(required = false) String format,
             @RequestParam(required = false) String language) {
 
         return new ApiResponse<>(true, "Movie performance retrieved",
-            analyticsService.getMoviePerformance(toFilter(dateFrom, dateTo, movieId, theatreId, screenId, cityId, format, language)));
+            analyticsService.getMoviePerformance(toFilter(dateFrom, dateTo, movieId, theatreId, screenId, cityId, state, format, language)));
     }
 
     @GetMapping("/theatres")
@@ -89,11 +93,12 @@ public class AdminAnalyticsController {
             @RequestParam(required = false) Long theatreId,
             @RequestParam(required = false) Long screenId,
             @RequestParam(required = false) Long cityId,
+            @RequestParam(required = false) String state,
             @RequestParam(required = false) String format,
             @RequestParam(required = false) String language) {
 
         return new ApiResponse<>(true, "Theatre performance retrieved",
-            analyticsService.getTheatrePerformance(toFilter(dateFrom, dateTo, movieId, theatreId, screenId, cityId, format, language)));
+            analyticsService.getTheatrePerformance(toFilter(dateFrom, dateTo, movieId, theatreId, screenId, cityId, state, format, language)));
     }
 
     @GetMapping("/screens")
@@ -104,11 +109,12 @@ public class AdminAnalyticsController {
             @RequestParam(required = false) Long theatreId,
             @RequestParam(required = false) Long screenId,
             @RequestParam(required = false) Long cityId,
+            @RequestParam(required = false) String state,
             @RequestParam(required = false) String format,
             @RequestParam(required = false) String language) {
 
         return new ApiResponse<>(true, "Screen performance retrieved",
-            analyticsService.getScreenPerformance(toFilter(dateFrom, dateTo, movieId, theatreId, screenId, cityId, format, language)));
+            analyticsService.getScreenPerformance(toFilter(dateFrom, dateTo, movieId, theatreId, screenId, cityId, state, format, language)));
     }
 
     @GetMapping("/shows")
@@ -119,11 +125,12 @@ public class AdminAnalyticsController {
             @RequestParam(required = false) Long theatreId,
             @RequestParam(required = false) Long screenId,
             @RequestParam(required = false) Long cityId,
+            @RequestParam(required = false) String state,
             @RequestParam(required = false) String format,
             @RequestParam(required = false) String language) {
 
         return new ApiResponse<>(true, "Show performance retrieved",
-            analyticsService.getShowPerformance(toFilter(dateFrom, dateTo, movieId, theatreId, screenId, cityId, format, language)));
+            analyticsService.getShowPerformance(toFilter(dateFrom, dateTo, movieId, theatreId, screenId, cityId, state, format, language)));
     }
 
     @GetMapping("/timeslots")
@@ -134,11 +141,12 @@ public class AdminAnalyticsController {
             @RequestParam(required = false) Long theatreId,
             @RequestParam(required = false) Long screenId,
             @RequestParam(required = false) Long cityId,
+            @RequestParam(required = false) String state,
             @RequestParam(required = false) String format,
             @RequestParam(required = false) String language) {
 
         return new ApiResponse<>(true, "Time slot performance retrieved",
-            analyticsService.getTimeSlotPerformance(toFilter(dateFrom, dateTo, movieId, theatreId, screenId, cityId, format, language)));
+            analyticsService.getTimeSlotPerformance(toFilter(dateFrom, dateTo, movieId, theatreId, screenId, cityId, state, format, language)));
     }
 
     @GetMapping("/dayofweek")
@@ -149,11 +157,12 @@ public class AdminAnalyticsController {
             @RequestParam(required = false) Long theatreId,
             @RequestParam(required = false) Long screenId,
             @RequestParam(required = false) Long cityId,
+            @RequestParam(required = false) String state,
             @RequestParam(required = false) String format,
             @RequestParam(required = false) String language) {
 
         return new ApiResponse<>(true, "Day of week performance retrieved",
-            analyticsService.getDayOfWeekPerformance(toFilter(dateFrom, dateTo, movieId, theatreId, screenId, cityId, format, language)));
+            analyticsService.getDayOfWeekPerformance(toFilter(dateFrom, dateTo, movieId, theatreId, screenId, cityId, state, format, language)));
     }
 
     @GetMapping("/formats")
@@ -164,11 +173,12 @@ public class AdminAnalyticsController {
             @RequestParam(required = false) Long theatreId,
             @RequestParam(required = false) Long screenId,
             @RequestParam(required = false) Long cityId,
+            @RequestParam(required = false) String state,
             @RequestParam(required = false) String format,
             @RequestParam(required = false) String language) {
 
         return new ApiResponse<>(true, "Format performance retrieved",
-            analyticsService.getFormatPerformance(toFilter(dateFrom, dateTo, movieId, theatreId, screenId, cityId, format, language)));
+            analyticsService.getFormatPerformance(toFilter(dateFrom, dateTo, movieId, theatreId, screenId, cityId, state, format, language)));
     }
 
     @GetMapping("/languages")
@@ -179,11 +189,12 @@ public class AdminAnalyticsController {
             @RequestParam(required = false) Long theatreId,
             @RequestParam(required = false) Long screenId,
             @RequestParam(required = false) Long cityId,
+            @RequestParam(required = false) String state,
             @RequestParam(required = false) String format,
             @RequestParam(required = false) String language) {
 
         return new ApiResponse<>(true, "Language performance retrieved",
-            analyticsService.getLanguagePerformance(toFilter(dateFrom, dateTo, movieId, theatreId, screenId, cityId, format, language)));
+            analyticsService.getLanguagePerformance(toFilter(dateFrom, dateTo, movieId, theatreId, screenId, cityId, state, format, language)));
     }
 
     @GetMapping("/filters")
@@ -196,7 +207,7 @@ public class AdminAnalyticsController {
 
     private AnalyticsFilter toFilter(String dateFrom, String dateTo,
                                      Long movieId, Long theatreId, Long screenId,
-                                     Long cityId, String format, String language) {
+                                     Long cityId, String state, String format, String language) {
         java.time.LocalDate from = null;
         java.time.LocalDate to = null;
         try {
@@ -204,6 +215,6 @@ public class AdminAnalyticsController {
             if (dateTo != null && !dateTo.isBlank()) to = java.time.LocalDate.parse(dateTo);
         } catch (Exception ignored) {}
 
-        return new AnalyticsFilter(from, to, movieId, theatreId, screenId, cityId, format, language);
+        return new AnalyticsFilter(from, to, movieId, theatreId, screenId, cityId, state, format, language);
     }
 }

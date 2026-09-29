@@ -65,7 +65,7 @@ public class AdminDTOs {
 
     public record CityResponse(Long id, String name, String state) {}
 
-    public record TheatreUpdateRequest(String name, String address, Long cityId) {}
+    public record TheatreUpdateRequest(String name, String address, Long cityId, String mapsLink) {}
 
     public record ScreenUpdateRequest(String name, Integer totalSeats) {}
 
@@ -73,7 +73,8 @@ public class AdminDTOs {
     public record TheatreRequest(
         Long cityId,
         String name,
-        String address
+        String address,
+        String mapsLink
     ) {}
 
     // Assign a new THEATRE_OWNER account to a theatre in one step.
@@ -152,6 +153,7 @@ public class AdminDTOs {
             Long id,
             String name,
             String address,
+            String mapsLink,
             Long cityId,
             String cityName,
             List<ScreenResponse> screens,

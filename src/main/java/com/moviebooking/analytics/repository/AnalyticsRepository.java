@@ -59,6 +59,10 @@ public class AnalyticsRepository {
             where.append(" AND ").append(showAlias).append(".screen_id IN (SELECT scr.id FROM screens scr JOIN theatres t ON scr.theatre_id = t.id WHERE t.city_id = ?)");
             params.add(f.cityId());
         }
+        if (f.state() != null && !f.state().isBlank()) {
+            where.append(" AND ").append(showAlias).append(".screen_id IN (SELECT scr.id FROM screens scr JOIN theatres t ON scr.theatre_id = t.id JOIN cities c ON t.city_id = c.id WHERE c.state = ?)");
+            params.add(f.state());
+        }
         if (f.format() != null && !f.format().isBlank()) {
             where.append(" AND ").append(showAlias).append(".format = ?");
             params.add(f.format());
@@ -744,7 +748,7 @@ public class AnalyticsRepository {
             """, "ORDER BY scr.name", scoped);
 
         String citySql = filterOptionQuery("""
-            SELECT DISTINCT c.id, c.name
+            SELECT DISTINCT c.id, c.name, c.state
             FROM cities c
             JOIN theatres t ON t.city_id = c.id
             JOIN screens scr ON scr.theatre_id = t.id
@@ -755,24 +759,25 @@ public class AnalyticsRepository {
 
         List<Object[]> movieRows = runFilterOptionQuery(movieSql, restrictToTheatreId);
         List<FilterOption> movies = movieRows.stream()
-            .map(r -> new FilterOption(toLong(r[0]), String.valueOf(r[1]), null))
+            .map(r -> new FilterOption(toLong(r[0]), String.valueOf(r[1]), null, null))
             .toList();
 
         List<Object[]> theatreRows = runFilterOptionQuery(theatreSql, restrictToTheatreId);
         List<FilterOption> theatres = theatreRows.stream()
             .map(r -> new FilterOption(toLong(r[0]), String.valueOf(r[1]),
-                r[2] != null ? toLong(r[2]) : null))
+                r[2] != null ? toLong(r[2]) : null, null))
             .toList();
 
         List<Object[]> screenRows = runFilterOptionQuery(screenSql, restrictToTheatreId);
         List<FilterOption> screens = screenRows.stream()
             .map(r -> new FilterOption(toLong(r[0]), String.valueOf(r[1]),
-                r[2] != null ? toLong(r[2]) : null))
+                r[2] != null ? toLong(r[2]) : null, null))
             .toList();
 
         List<Object[]> cityRows = runFilterOptionQuery(citySql, restrictToTheatreId);
         List<FilterOption> cities = cityRows.stream()
-            .map(r -> new FilterOption(toLong(r[0]), String.valueOf(r[1]), null))
+            .map(r -> new FilterOption(toLong(r[0]), String.valueOf(r[1]), null,
+                r[2] != null ? String.valueOf(r[2]) : null))
             .toList();
 
         return new FilterOptionsResponse(movies, theatres, screens, cities,
@@ -792,22 +797,22 @@ public class AnalyticsRepository {
 
     static List<FilterOption> formatOptions() {
         return List.of(
-            new FilterOption(null, "TWO_D", null),
-            new FilterOption(null, "THREE_D", null),
-            new FilterOption(null, "IMAX_2D", null),
-            new FilterOption(null, "IMAX_3D", null),
-            new FilterOption(null, "FOUR_DX", null)
+            new FilterOption(null, "$1", null, null),
+            new FilterOption(null, "$1", null, null),
+            new FilterOption(null, "$1", null, null),
+            new FilterOption(null, "$1", null, null),
+            new FilterOption(null, "$1", null, null)
         );
     }
 
     static List<FilterOption> languageOptions() {
         return List.of(
-            new FilterOption(null, "ENGLISH", null),
-            new FilterOption(null, "TAMIL", null),
-            new FilterOption(null, "HINDI", null),
-            new FilterOption(null, "TELUGU", null),
-            new FilterOption(null, "KANNADA", null),
-            new FilterOption(null, "MALAYALAM", null)
+            new FilterOption(null, "$1", null, null),
+            new FilterOption(null, "$1", null, null),
+            new FilterOption(null, "$1", null, null),
+            new FilterOption(null, "$1", null, null),
+            new FilterOption(null, "$1", null, null),
+            new FilterOption(null, "$1", null, null)
         );
     }
 

@@ -345,8 +345,22 @@ public class AdminService {
         theatre.setName(req.name());
         theatre.setAddress(req.address());
         theatre.setCity(city);
+        theatre.setMapsLink(normalizeMapsLink(req.mapsLink()));
         Theatre saved = theatreRepository.save(theatre);
         return mapToTheatreResponse(saved);
+    }
+
+    // Blank clears the link; anything else must look like an http(s) URL, so a
+    // malformed paste never ends up on the customer-facing map button.
+    private String normalizeMapsLink(String raw) {
+        if (raw == null) return null;
+        String link = raw.trim();
+        if (link.isEmpty()) return null;
+        boolean http = link.toLowerCase().startsWith("http://") || link.toLowerCase().startsWith("https://");
+        if (!http || link.chars().anyMatch(ch -> Character.isWhitespace(ch))) {
+            throw new BusinessException("The Google Maps link must start with http:// or https://.");
+        }
+        return link;
     }
 
     public List<TheatreResponse> getAllTheatres() {
@@ -373,6 +387,9 @@ public class AdminService {
             City city = cityRepository.findByIdAndIsDeletedFalse(req.cityId())
                     .orElseThrow(() -> new ResourceNotFoundException("City not found with ID: " + req.cityId()));
             theatre.setCity(city);
+        }
+        if (req.mapsLink() != null) {
+            theatre.setMapsLink(normalizeMapsLink(req.mapsLink()));
         }
         return mapToTheatreResponse(theatreRepository.save(theatre));
     }
@@ -503,8 +520,8 @@ public class AdminService {
         String ownerName = t.getOwner() != null ? t.getOwner().getName() : null;
         String ownerEmail = t.getOwner() != null ? t.getOwner().getEmail() : null;
 
-        return new TheatreResponse(t.getId(), t.getName(), t.getAddress(), cityId, cityName, screens,
-                ownerId, ownerName, ownerEmail);
+        return new TheatreResponse(t.getId(), t.getName(), t.getAddress(), t.getMapsLink(), cityId, cityName,
+                screens, ownerId, ownerName, ownerEmail);
     }
 
     // --- SHOWS ---

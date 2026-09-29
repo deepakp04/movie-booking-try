@@ -289,6 +289,18 @@ async function loadShowtimes() {
             nameEl.className = 'theatre-name';
             nameEl.textContent = theatre.theatreName;
 
+            // Info button beside the theatre name opens the location slider.
+            const nameRow = document.createElement('div');
+            nameRow.className = 'theatre-name-row';
+            const infoBtn = document.createElement('button');
+            infoBtn.type = 'button';
+            infoBtn.className = 'theatre-info-btn';
+            infoBtn.textContent = 'ℹ️';
+            infoBtn.title = 'Theatre info, map and directions';
+            infoBtn.setAttribute('aria-label', 'Info about ' + (theatre.theatreName || 'theatre'));
+            infoBtn.onclick = () => openTheatreInfo(theatre);
+            nameRow.append(nameEl, infoBtn);
+
             const addrEl = document.createElement('div');
             addrEl.className = 'theatre-address';
             addrEl.textContent = theatre.address;
@@ -344,7 +356,7 @@ async function loadShowtimes() {
             });
 
             if (chipWrap.children.length > 0) {
-                card.append(nameEl, addrEl, chipWrap);
+                card.append(nameRow, addrEl, chipWrap);
                 list.appendChild(card);
             }
         });
@@ -353,6 +365,55 @@ async function loadShowtimes() {
         console.error('Error fetching showtimes:', err);
     }
 }
+
+// ===== Theatre info slider: map preview + click-through to Google Maps =====
+function theatreMapQuery(theatre) {
+    return [theatre.address, theatre.cityName, theatre.state]
+        .filter(Boolean).join(', ');
+}
+
+function theatreMapsUrl(theatre) {
+    const link = String(theatre.mapsLink || '').trim();
+    if (link.startsWith('http://') || link.startsWith('https://')) return link;
+    const text = theatreMapQuery(theatre);
+    return text ? 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(text) : '';
+}
+
+function openTheatreInfo(theatre) {
+    const slider = document.getElementById('theatreInfoSlider');
+    if (!slider) return;
+    const text = theatreMapQuery(theatre) || theatre.theatreName || '';
+
+    document.getElementById('tiName').textContent = theatre.theatreName || 'Theatre';
+    document.getElementById('tiAddress').textContent = theatreMapQuery(theatre);
+
+    // The embed geocodes the address text (works without an API key); clicking
+    // the map follows the admin-supplied Google Maps link when there is one.
+    document.getElementById('tiMap').src =
+        'https://www.google.com/maps?q=' + encodeURIComponent(text) + '&output=embed';
+
+    const url = theatreMapsUrl(theatre);
+    const cta = document.getElementById('tiOpenMaps');
+    if (cta) cta.href = url;
+    const overlay = document.getElementById('tiMapOverlay');
+    if (overlay) {
+        overlay.onclick = () => { if (url) window.open(url, '_blank', 'noopener'); };
+    }
+
+    slider.classList.add('open');
+    slider.setAttribute('aria-hidden', 'false');
+}
+
+function closeTheatreInfo() {
+    const slider = document.getElementById('theatreInfoSlider');
+    if (!slider) return;
+    slider.classList.remove('open');
+    slider.setAttribute('aria-hidden', 'true');
+}
+
+document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') closeTheatreInfo();
+});
 
 // 4. Booking Auth Gate
 function handleShowSelection(showId, theatreName, time, screenName) {

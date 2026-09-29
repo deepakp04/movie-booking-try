@@ -52,12 +52,14 @@
                         <h3>Add New City</h3>
                         <form id="addCityForm" novalidate>
                             <div class="form-group">
-                                <label for="cityName">City Name</label>
-                                <input type="text" id="cityName" placeholder="e.g. Chennai" required>
+                                <label for="cityState">State</label>
+                                <select id="cityState" data-state-select data-placeholder="Select State" required onchange="onCityStateChange()"></select>
                             </div>
                             <div class="form-group">
-                                <label for="cityState">State</label>
-                                <input type="text" id="cityState" placeholder="e.g. Tamil Nadu" required>
+                                <label for="cityName">City Name</label>
+                                <input type="text" id="cityName" list="cityNameList" placeholder="e.g. Chennai" required>
+                                <datalist id="cityNameList"></datalist>
+                                <small style="color: var(--text-muted);">Pick a suggested city for the selected state, or type any city name.</small>
                             </div>
                             <button type="submit" class="btn btn-primary">Save City</button>
                         </form>
@@ -203,11 +205,20 @@
                     <div class="admin-card">
                         <h3>Register Theatre Venue</h3>
                         <form id="addTheatreForm" novalidate>
-                            <div class="form-group">
-                                <label for="theatreCitySelect">City</label>
-                                <select id="theatreCitySelect" required>
-                                    <option value="" disabled selected>Select City</option>
-                                </select>
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label for="theatreStateSelect">State</label>
+                                    <select id="theatreStateSelect" onchange="onTheatreStateChange()" required>
+                                        <option value="" disabled selected>Select State</option>
+                                    </select>
+                                    <small style="color: var(--text-muted);">Only states you have already added cities for.</small>
+                                </div>
+                                <div class="form-group">
+                                    <label for="theatreCitySelect">City</label>
+                                    <select id="theatreCitySelect" required>
+                                        <option value="" disabled selected>Select State First</option>
+                                    </select>
+                                </div>
                             </div>
                             <div class="form-group">
                                 <label for="theatreName">Theatre Name</label>
@@ -217,6 +228,29 @@
                                 <label for="theatreAddress">Address</label>
                                 <input type="text" id="theatreAddress" placeholder="GST Road, Pallavaram" required>
                             </div>
+                            <div class="form-group">
+                                <label for="theatreMapsLink">Google Maps Link</label>
+                                <input type="url" id="theatreMapsLink" placeholder="https://maps.app.goo.gl/...">
+                                <small style="color: var(--text-muted);">Paste the Share link from Google Maps — customers see it as a map on the show page.</small>
+                            </div>
+
+                            <hr class="divider">
+                            <h4 style="margin-bottom: 10px;">Assign Owner (optional)</h4>
+                            <div class="form-group">
+                                <label for="theatreOwnerName">Owner Full Name</label>
+                                <input type="text" id="theatreOwnerName" placeholder="e.g. Priya Sharma">
+                            </div>
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label for="theatreOwnerEmail">Owner Email</label>
+                                    <input type="email" id="theatreOwnerEmail" placeholder="owner@pvr.com">
+                                </div>
+                                <div class="form-group">
+                                    <label for="theatreOwnerPassword">Temporary Password</label>
+                                    <input type="password" id="theatreOwnerPassword" placeholder="Min 8 chars" autocomplete="new-password">
+                                </div>
+                            </div>
+                            <p class="subtitle" style="margin: 0 0 14px 0;">Fill all three fields to create the owner account in the same step, or leave them blank to assign later.</p>
                             <button type="submit" class="btn btn-primary">Register Theatre</button>
                         </form>
 
@@ -225,10 +259,25 @@
                         <!-- Form 2: Add Screen to Theatre -->
                         <h3>Add Screen / Auditorium</h3>
                         <form id="addScreenForm" novalidate>
+                            <p class="subtitle" style="margin: 0 0 12px 0;">Start with the state — only states and cities that already have a theatre are listed.</p>
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label for="screenStateSelect">State</label>
+                                    <select id="screenStateSelect" onchange="onScreenStateChange()" required>
+                                        <option value="" disabled selected>Select State</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label for="screenCitySelect">City</label>
+                                    <select id="screenCitySelect" onchange="onScreenCityChange()" required>
+                                        <option value="" disabled selected>Select State First</option>
+                                    </select>
+                                </div>
+                            </div>
                             <div class="form-group">
                                 <label for="screenTheatreSelect">Target Theatre</label>
                                 <select id="screenTheatreSelect" required>
-                                    <option value="" disabled selected>Select Theatre</option>
+                                    <option value="" disabled selected>Select City First</option>
                                 </select>
                             </div>
                             <div class="form-group">
@@ -274,9 +323,14 @@
                         <h3>Create Show Slot</h3>
                         <form id="addShowForm" novalidate>
                             <div class="form-group">
+                                <label for="showStateSelect">State</label>
+                                <select id="showStateSelect" data-state-select data-placeholder="Select State" onchange="onShowStateChange()" required></select>
+                                <small style="color: var(--text-muted);">Cities for the selected state appear below — pick the state first.</small>
+                            </div>
+                            <div class="form-group">
                                 <label for="showCitySelect">City</label>
                                 <select id="showCitySelect" onchange="loadTheatresForCity(this.value)" required>
-                                    <option value="" disabled selected>Select City</option>
+                                    <option value="" disabled selected>Select State First</option>
                                 </select>
                             </div>
                             <div class="form-group">
@@ -411,12 +465,16 @@
                 <!-- STEP 1 -->
                 <div class="admin-card">
                     <h3>Step 1 &mdash; Choose a Screen</h3>
-                    <p class="subtitle">Narrow by city first, then pick the theatre and screen.</p>
+                    <p class="subtitle">Pick the state first — cities, theatres and screens appear after that.</p>
                     <div class="form-row">
+                        <div class="form-group">
+                            <label for="mtStateSelect">State</label>
+                            <select id="mtStateSelect" data-state-select data-placeholder="Select State" onchange="mtOnStateChange()"></select>
+                        </div>
                         <div class="form-group">
                             <label for="mtCitySelect">City</label>
                             <select id="mtCitySelect" onchange="mtOnCityChange()">
-                                <option value="">All Cities</option>
+                                <option value="" disabled selected>Select State First</option>
                             </select>
                         </div>
                         <div class="form-group">
@@ -514,6 +572,10 @@
 
                 <!-- Filter Bar: narrows left to right, City -> Theatre -> Screen -->
                 <div class="analytics-filters">
+                    <div class="filter-group">
+                        <label>State</label>
+                        <select id="filterState" data-state-select data-placeholder="All States" onchange="onAnalyticsFilterChange('state')"></select>
+                    </div>
                     <div class="filter-group">
                         <label>City</label>
                         <select id="filterCity" onchange="onAnalyticsFilterChange('city')"></select>

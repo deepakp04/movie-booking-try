@@ -840,3 +840,153 @@ body {
     color: var(--text-muted, #8a8a8a);
     line-height: 1.4;
 }
+
+/* ===== Theatre info slider: map preview + Google Maps click-through ===== */
+.theatre-name-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 4px;
+}
+
+.theatre-name-row .theatre-name {
+    margin-bottom: 0;
+}
+
+.theatre-info-btn {
+    flex: 0 0 auto;
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    border: 1px solid var(--border-color, #2a2e37);
+    background: transparent;
+    color: var(--text-main, #f0f2f5);
+    font-size: 0.95rem;
+    line-height: 1;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.theatre-info-btn:hover {
+    border-color: var(--primary-gold, #e5b80b);
+    background: rgba(229, 184, 11, 0.12);
+}
+
+.info-slider {
+    position: fixed;
+    inset: 0;
+    z-index: 90;
+    visibility: hidden;
+    pointer-events: none;
+}
+
+.info-slider.open {
+    visibility: visible;
+    pointer-events: auto;
+}
+
+.info-slider-backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.6);
+    opacity: 0;
+    transition: opacity 0.25s ease;
+}
+
+.info-slider.open .info-slider-backdrop {
+    opacity: 1;
+}
+
+.info-slider-panel {
+    position: absolute;
+    top: 0;
+    right: 0;
+    height: 100%;
+    width: min(420px, 94vw);
+    background: var(--card-bg, #16191e);
+    border-left: 1px solid var(--border-color, #2a2e37);
+    box-shadow: -12px 0 32px rgba(0, 0, 0, 0.45);
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    overflow-y: auto;
+    transform: translateX(100%);
+    transition: transform 0.3s ease;
+}
+
+.info-slider.open .info-slider-panel {
+    transform: translateX(0);
+}
+
+.info-slider-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 12px;
+}
+
+.info-slider-header h3 {
+    margin: 0;
+    color: var(--primary-gold, #e5b80b);
+}
+
+.info-slider-address {
+    margin: 4px 0 0;
+    font-size: 0.85rem;
+    color: var(--text-muted, #8c93a0);
+}
+
+.info-map-frame {
+    position: relative;
+    border: 1px solid var(--border-color, #2a2e37);
+    border-radius: 8px;
+    overflow: hidden;
+    flex: 1;
+    min-height: 280px;
+}
+
+.info-map-frame iframe {
+    width: 100%;
+    height: 100%;
+    min-height: 280px;
+    border: 0;
+    display: block;
+}
+
+.info-map-overlay {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    border: 0;
+    background: rgba(13, 15, 18, 0);
+    cursor: pointer;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    padding: 10px;
+    transition: background 0.15s ease;
+}
+
+.info-map-overlay:hover {
+    background: rgba(13, 15, 18, 0.25);
+}
+
+.info-map-overlay span {
+    background: rgba(13, 15, 18, 0.85);
+    color: var(--text-main, #f0f2f5);
+    font-size: 0.78rem;
+    padding: 6px 10px;
+    border-radius: 999px;
+    border: 1px solid var(--border-color, #2a2e37);
+}
+
+.info-slider-cta {
+    text-align: center;
+    text-decoration: none;
+}

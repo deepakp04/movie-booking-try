@@ -35,6 +35,11 @@ public class Theatre extends BaseEntity {
     @Column(nullable = false, length = 255)
     private String address;
 
+    // Google Maps share link (from Google Maps' Share button). Optional: shown as
+    // the map preview / directions link on the customer showtimes page.
+    @Column(length = 500)
+    private String mapsLink;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "city_id", nullable = false)
     private City city;
