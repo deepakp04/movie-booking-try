@@ -130,6 +130,24 @@ public class OwnerOperationsController {
         return ApiResponse.success("Theatre report retrieved successfully", report);
     }
 
+    // ================= TIER VALUE REPORT =================
+
+    @GetMapping("/tier-value")
+    public ApiResponse<TierValueResponse> getTierValueReport(
+            @RequestParam(required = false) String dateFrom,
+            @RequestParam(required = false) String dateTo,
+            HttpServletRequest request) {
+
+        Theatre theatre = currentOwnersTheatre();
+        TierValueResponse report = operationsService.getTierValueReport(
+                dateFrom, dateTo, null, theatre.getId(), null, null, theatre.getId());
+
+        auditLog(AuditAction.GENERATE_REPORT, "THEATRE", theatre.getId(), theatre.getId(), null,
+                "Viewed tier value report", request);
+
+        return ApiResponse.success("Tier value report retrieved successfully", report);
+    }
+
     // ================= TICKET HOLDERS =================
 
     @GetMapping("/reports/ticket-holders")
@@ -162,6 +180,8 @@ public class OwnerOperationsController {
             case "THEATRE_REPORT" -> snapshot = reportService.generateTheatreReport(theatre.getId(), req.dateFrom(), req.dateTo(), theatre.getId());
             case "TICKET_HOLDER_REPORT" -> snapshot = reportService.generateTicketHolderReport(req.showId(), theatre.getId());
             case "INCIDENT_REPORT" -> snapshot = reportService.generateIncidentReport(req.incidentId(), theatre.getId());
+            case "TIER_VALUE_REPORT" -> snapshot = reportService.generateTierValueReport(
+                    theatre.getId(), req.dateFrom(), req.dateTo(), theatre.getId());
             default -> throw new com.moviebooking.common.exception.BusinessException("Unknown report type: " + req.reportType());
         }
 

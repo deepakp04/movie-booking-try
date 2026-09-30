@@ -91,8 +91,11 @@ public class Customer360Service {
         long expired = bookings.stream().filter(b -> b.getStatus() == BookingStatus.EXPIRED).count();
 
         // Revenue
+        // "Total spent" means real money paid — voucher-funded bookings were free,
+        // so they are excluded here exactly like they are for voucher eligibility.
         BigDecimal totalSpent = bookings.stream()
                 .filter(b -> b.getStatus() == BookingStatus.CONFIRMED)
+                .filter(b -> !b.isVoucherBooking())
                 .map(Booking::getTotalAmount)
                 .filter(Objects::nonNull)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
@@ -147,8 +150,11 @@ public class Customer360Service {
         List<Booking> bookings = bookingRepository.findByUserIdOrderByCreatedAtDesc(user.getId());
 
         long confirmed = bookings.stream().filter(b -> b.getStatus() == BookingStatus.CONFIRMED).count();
+        // "Total spent" means real money paid — voucher-funded bookings were free,
+        // so they are excluded here exactly like they are for voucher eligibility.
         BigDecimal totalSpent = bookings.stream()
                 .filter(b -> b.getStatus() == BookingStatus.CONFIRMED)
+                .filter(b -> !b.isVoucherBooking())
                 .map(Booking::getTotalAmount)
                 .filter(Objects::nonNull)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
@@ -214,8 +220,10 @@ public class Customer360Service {
                 booking.getNumberOfSeats(),
                 booking.getTotalAmount(),
                 booking.getStatus().name(),
-                tx != null ? tx.getStatus().name() : "N/A",
-                tx != null ? tx.getRazorpayPaymentId() : null,
+                tx != null ? tx.getStatus().name()
+                        : (booking.isVoucherBooking() ? "VOUCHER" : "N/A"),
+                tx != null ? tx.getRazorpayPaymentId()
+                        : (booking.isVoucherBooking() ? booking.getVoucherCode() : null),
                 booking.getCreatedAt(),
                 attendeeDtos
         );

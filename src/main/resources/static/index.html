@@ -29,6 +29,14 @@
         </div>
     </header>
 
+    <!-- Ticket Voucher Marquee: only shown to signed-in customers whose voucher
+         still has free tickets. Clicking opens the voucher info box. -->
+    <div id="voucherMarquee" class="voucher-marquee hidden" role="button" tabindex="0"
+         title="Click to see your voucher details"
+         onclick="openVoucherInfo()" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openVoucherInfo();}">
+        <span class="voucher-marquee-track" id="voucherMarqueeTrack"></span>
+    </div>
+
     <main class="main-container">
         
         <!-- Global Alert Box -->
@@ -105,6 +113,23 @@
 
 		            <!-- Pricing tiers for this show, populated from the seat map -->
 		            <div id="tierLegend" class="seat-legend tier-legend"></div>
+
+		            <!-- Voucher box: enter the account-bound code and see the
+		                 remaining free tickets before confirming. -->
+		            <div id="voucherApplyCard" class="voucher-apply-card hidden">
+		                <div class="voucher-apply-title">
+		                    <span>🎟️ Have a voucher code?</span>
+		                    <span class="voucher-apply-balance" id="voucherApplyBalance">Checking your voucher…</span>
+		                </div>
+		                <div class="voucher-apply-row">
+		                    <input type="text" id="voucherCodeInput" class="voucher-code-input"
+		                           placeholder="e.g. PVR4-ABCD1234" maxlength="40"
+		                           autocomplete="off" spellcheck="false">
+		                    <button class="btn btn-secondary btn-sm" id="voucherApplyBtn"
+		                            onclick="applyVoucherCode()">Apply</button>
+		                </div>
+		                <p id="voucherApplyStatus" class="voucher-apply-status"></p>
+		            </div>
 
 		            <p id="seatCountHint" class="seat-count-hint"></p>
 
@@ -190,6 +215,96 @@
             <div class="modal-actions" style="margin-top: 16px;">
                 <button class="btn btn-secondary" onclick="closeAttendeeModal()">Back to Seats</button>
                 <button class="btn btn-primary" id="attendeeContinueBtn" onclick="submitAttendees()" disabled>Continue to Pay</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Voucher info box: what it is, how it works, validity, who/where, conditions -->
+    <div id="voucherInfoModal" class="modal hidden">
+        <div class="modal-card voucher-info-card">
+            <div class="voucher-info-head">
+                <h2>🎟️ Your PVR Voucher</h2>
+                <button class="btn btn-secondary btn-sm" onclick="closeVoucherInfo()" aria-label="Close voucher info">✕</button>
+            </div>
+
+            <div class="voucher-code-badge">
+                <p class="voucher-code-label">Your unique voucher code (linked to your account)</p>
+                <p class="voucher-code-value" id="voucherInfoCode">—</p>
+                <p class="voucher-code-balance" id="voucherInfoBalance">—</p>
+                <p class="voucher-code-expiry" id="voucherInfoExpiry">—</p>
+            </div>
+
+            <div class="voucher-info-section">
+                <h4>What is this voucher?</h4>
+                <p>Because your lifetime spend with PVR crossed <strong>₹10,000</strong>, you have been
+                   gifted a voucher worth <strong>4 free tickets</strong> — any movie, any seat tier,
+                   any price range.</p>
+            </div>
+
+            <div class="voucher-info-section">
+                <h4>How it works</h4>
+                <ol>
+                    <li>Pick any movie, city, theatre and showtime.</li>
+                    <li>On the seat-selection page, type your voucher code in the “Have a voucher code?” box and click <strong>Apply</strong>.</li>
+                    <li>Select up to your remaining free tickets and fill in the attendee details.</li>
+                    <li>Confirm — the booking is confirmed instantly, <strong>no payment gateway</strong> is opened.</li>
+                    <li>Your remaining free tickets update automatically in this marquee and in the voucher box.</li>
+                </ol>
+            </div>
+
+            <div class="voucher-info-section">
+                <h4>Validity</h4>
+                <p id="voucherInfoValidityText">Your voucher is valid for 30 days from the day it was issued — usable right up to the 30th day at 11:59 PM, and invalid from the 31st day at 12:00 AM.</p>
+            </div>
+
+            <div class="voucher-info-section">
+                <h4>Who can use it, and where</h4>
+                <ul>
+                    <li>Only the account it was issued to — the code is mapped to your account and cannot be shared or transferred.</li>
+                    <li>Only on this PVR Cinemas website/app, while signed in — not at ticket counters or other platforms.</li>
+                    <li>On any show at any PVR theatre listed on this platform, including premium and recliner seats.</li>
+                </ul>
+            </div>
+
+            <div class="voucher-info-section">
+                <h4>Conditions</h4>
+                <ul>
+                    <li>Worth 4 free tickets in total; each booking can use up to your remaining balance.</li>
+                    <li>If you try to book more tickets than your balance, you'll be asked to reduce the count.</li>
+                    <li>Unused tickets lapse when the voucher expires — the balance is not carried forward.</li>
+                    <li>Cannot be exchanged for cash or credit and cannot be combined with another voucher.</li>
+                    <li>If you cancel a voucher booking, the free tickets are returned to your balance while the voucher is still valid.</li>
+                </ul>
+            </div>
+
+            <div class="modal-actions" style="margin-top: 6px;">
+                <button class="btn btn-primary" onclick="closeVoucherInfo()">Got it</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Voucher booking success: shown instead of the Razorpay flow. -->
+    <div id="voucherSuccessModal" class="modal hidden">
+        <div class="modal-card">
+            <h2>✅ Booking confirmed — voucher applied</h2>
+            <p class="info-text" id="voucherSuccessMessage" style="margin-top: 10px; line-height: 1.6;"></p>
+            <div class="modal-actions" style="margin-top: 18px;">
+                <button class="btn btn-secondary" onclick="closeVoucherSuccess()">Keep browsing</button>
+                <button class="btn btn-primary" onclick="window.location.href='/auth.html'">View my bookings</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Voucher exception dialog: shown when the selection exceeds the balance. -->
+    <div id="voucherErrorModal" class="modal hidden">
+        <div class="modal-card voucher-error-card">
+            <h2>⚠️ Voucher can't cover this booking</h2>
+            <p class="voucher-error-message" id="voucherErrorMessage"></p>
+            <p class="info-text" style="margin-top: 12px; color: var(--text-muted); font-size: 0.85rem;">
+                Update the number of tickets and try again — or remove the voucher code to pay normally.
+            </p>
+            <div class="modal-actions" style="margin-top: 18px;">
+                <button class="btn btn-primary" onclick="closeVoucherError()">Adjust tickets</button>
             </div>
         </div>
     </div>

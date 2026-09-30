@@ -24,8 +24,13 @@ public class BookingController {
 
     @PostMapping("/hold")
     public ApiResponse<BookingResponse> holdSeats(@RequestBody HoldSeatsRequest req) {
-        return new ApiResponse<>(true, "Seats held for 20 minutes. Complete payment before the hold expires.",
-                bookingService.holdSeats(req));
+        BookingResponse booking = bookingService.holdSeats(req);
+        boolean voucherBooking = "VOUCHER".equals(booking.paymentMode());
+        String message = voucherBooking
+                ? "Booking confirmed with your voucher — " + booking.voucherTicketsUsed()
+                    + " free ticket(s) used. No payment needed; your voucher balance has been updated."
+                : "Seats held for 20 minutes. Complete payment before the hold expires.";
+        return new ApiResponse<>(true, message, booking);
     }
 
     @GetMapping("/{bookingId}")

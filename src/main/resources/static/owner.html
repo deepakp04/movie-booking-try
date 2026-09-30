@@ -555,6 +555,7 @@
                         <button class="btn btn-secondary btn-sm" onclick="opsShowSection('opsShowReport')">🎬 Show Report</button>
                         <button class="btn btn-secondary btn-sm" onclick="opsShowSection('opsTheatreReport')">🏛️ Theatre Report</button>
                         <button class="btn btn-secondary btn-sm" onclick="opsShowSection('opsTicketHolders')">🎟️ Ticket Holders</button>
+                        <button class="btn btn-secondary btn-sm" onclick="opsShowSection('opsTierValueReport')">💎 Tier Value</button>
                         <button class="btn btn-secondary btn-sm" onclick="opsShowSection('opsReports')">📄 Generated Reports</button>
                     </div>
 
@@ -667,6 +668,26 @@
                             </div>
                         </div>
                         <div id="opsTicketHoldersResult" class="hidden"></div>
+                    </div>
+                </div>
+
+                <!-- TIER VALUE REPORT SECTION -->
+                <div id="opsTierValueReport" class="ops-section hidden">
+                    <div class="admin-card">
+                        <h3>💎 Pricing Tier Value Report</h3>
+                        <p class="subtitle">Business value of every pricing tier at your theatre — occupancy, revenue mix, realised vs configured price, and premium inventory left unsold.</p>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="opsTvfDateFrom">Date From</label>
+                                <input type="date" id="opsTvfDateFrom">
+                            </div>
+                            <div class="form-group">
+                                <label for="opsTvfDateTo">Date To</label>
+                                <input type="date" id="opsTvfDateTo">
+                            </div>
+                        </div>
+                        <button class="btn btn-primary btn-sm" onclick="opsLoadTierValue()">Load Report</button>
+                        <div id="opsTierValueResult" class="hidden" style="margin-top: 16px;"></div>
                     </div>
                 </div>
 

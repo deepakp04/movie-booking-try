@@ -3,6 +3,7 @@ package com.moviebooking.booking.model;
 import com.moviebooking.auth.entity.User;
 import com.moviebooking.catalog.model.Show;
 import com.moviebooking.common.BaseEntity;
+import com.moviebooking.voucher.model.Voucher;
 
 import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
@@ -53,6 +54,19 @@ public class Booking extends BaseEntity {
     @Column(nullable = false, length = 20)
     private BookingStatus status;
 
+    /** Null on rows created before vouchers shipped — treat as PAYMENT_GATEWAY. */
+    @Enumerated(EnumType.STRING)
+    @Column(length = 20)
+    private BookingPaymentMode paymentMode;
+
+    /** Set when this booking was paid with a ticket voucher instead of the gateway. */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "voucher_id")
+    private Voucher voucher;
+
+    @Column(length = 40)
+    private String voucherCode;
+
     // Unique reference for this booking attempt, surfaced to the user and
     // reused as the payment order reference in the next module.
     @Column(nullable = false, unique = true, length = 40)
@@ -62,4 +76,13 @@ public class Booking extends BaseEntity {
 
     @OneToMany(mappedBy = "booking", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<BookingAttendee> attendees = new ArrayList<>();
+
+    /** Never null for the rest of the codebase. */
+    public BookingPaymentMode effectivePaymentMode() {
+        return paymentMode == null ? BookingPaymentMode.PAYMENT_GATEWAY : paymentMode;
+    }
+
+    public boolean isVoucherBooking() {
+        return effectivePaymentMode() == BookingPaymentMode.VOUCHER || voucher != null;
+    }
 }

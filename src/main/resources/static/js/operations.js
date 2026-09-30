@@ -46,6 +46,11 @@ function opsInit() {
     const thFilterTo = document.getElementById('opsTHFilterDateTo');
     if (thFilterFrom && !thFilterFrom.value) thFilterFrom.value = thirtyDaysAgo.toISOString().split('T')[0];
     if (thFilterTo && !thFilterTo.value) thFilterTo.value = today.toISOString().split('T')[0];
+    // Also default the Tier Value report range (last 30 days)
+    const tvfFrom = document.getElementById('opsTvfDateFrom');
+    const tvfTo = document.getElementById('opsTvfDateTo');
+    if (tvfFrom && !tvfFrom.value) tvfFrom.value = thirtyDaysAgo.toISOString().split('T')[0];
+    if (tvfTo && !tvfTo.value) tvfTo.value = today.toISOString().split('T')[0];
     // Set default dates for screen utilisation
     const sevenDaysAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
     const utilFrom = document.getElementById('opsUtilDateFrom');
@@ -407,6 +412,10 @@ const OPS_FILTER_GROUPS = {
         city: 'opsTHFilterCity', theatre: 'opsTHFilterTheatre',
         screen: 'opsTHFilterScreen', movie: 'opsTHFilterMovie',
         dateFrom: 'opsTHFilterDateFrom', dateTo: 'opsTHFilterDateTo'
+    },
+    tierValue: {
+        city: 'opsTvfCity', theatre: 'opsTvfTheatre',
+        dateFrom: 'opsTvfDateFrom', dateTo: 'opsTvfDateTo'
     }
 };
 
@@ -426,6 +435,7 @@ function populateFilterDropdowns() {
     // -> movie cascade, so the Show Report and Ticket Holders sections can never
     // disagree about what is selectable.
     opsCascadeOpsFilters('showReport', 'init');
+    opsCascadeOpsFilters('tierValue', 'init');
     opsPopulateTHFilterDropdowns();
     opsPopulateTheatreReportCities();
     opsPopulateUtilCities();
@@ -543,7 +553,9 @@ function opsOnFilterChange(group, changed) {
     opsCascadeOpsFilters(group, changed);
     if (group === 'showReport') {
         opsApplyShowFilters();
-    } else {
+    } else if (group !== 'tierValue') {
+        // tierValue only narrows city -> theatre client-side; its data is
+        // fetched from /tier-value when the admin clicks Load.
         opsApplyTHFilters();
     }
 }
@@ -977,6 +989,218 @@ async function opsLoadTheatreReport() {
     }
 }
 
+// ================= TIER VALUE REPORT =================
+
+// Last query + saved-snapshot params for the Pricing Tier Value report, and the
+// two Chart.js instances it owns (destroyed before every re-render).
+let opsTvfLastParams = null;
+let opsTvfDoughnut = null;
+let opsTvfPriceBar = null;
+
+async function opsLoadTierValue() {
+    const container = document.getElementById('opsTierValueResult');
+    if (!container) return;
+
+    const isAdmin = OPS_API_BASE === '/api/admin';
+    const dateFrom = document.getElementById('opsTvfDateFrom')?.value || '';
+    const dateTo = document.getElementById('opsTvfDateTo')?.value || '';
+    const cityId = isAdmin ? (document.getElementById('opsTvfCity')?.value || '') : '';
+    const theatreId = isAdmin ? (document.getElementById('opsTvfTheatre')?.value || '') : '';
+
+    if (dateFrom && dateTo && dateFrom > dateTo) {
+        container.classList.remove('hidden');
+        container.innerHTML = '<p style="color: #ff5252;">Start date (' + dateFrom +
+            ') cannot be after end date (' + dateTo + '). Pick a valid range.</p>';
+        return;
+    }
+
+    opsTvfLastParams = { dateFrom, dateTo, cityId, theatreId };
+
+    const params = new URLSearchParams();
+    if (dateFrom) params.set('dateFrom', dateFrom);
+    if (dateTo) params.set('dateTo', dateTo);
+    if (isAdmin && cityId) params.set('cityId', cityId);
+    if (isAdmin && theatreId) params.set('theatreId', theatreId);
+
+    container.classList.remove('hidden');
+    container.innerHTML = '<p style="color: var(--text-muted);">Loading tier value report...</p>';
+
+    try {
+        const result = await opsApiCall('/tier-value' + (params.toString() ? '?' + params.toString() : ''));
+        if (!result || !result.data) return;
+        opsRenderTierValue(container, result.data);
+    } catch (e) {
+        container.innerHTML = '<p style="color: #ff5252;">Error: ' + e.message + '</p>';
+    }
+}
+
+function opsFmtMoney(value) {
+    return '\u20B9' + Number(value || 0).toLocaleString('en-IN', { maximumFractionDigits: 2 });
+}
+
+function opsRenderTierValue(container, r) {
+    const k = r.kpis || {};
+    const tiers = r.tiers || [];
+    const showMix = r.showMix || [];
+    const empty = tiers.length === 0;
+
+    const pct = v => Number(v || 0).toFixed(1) + '%';
+
+    container.innerHTML = `
+        <div style="margin-bottom: 20px;">
+            <h4 style="color: var(--text-primary); margin-bottom: 4px;">\uD83D\uDC8E Pricing Tier Value</h4>
+            <p style="color: var(--text-muted); font-size: 13px;">
+                Scope: ${r.scopeName} \u00B7 Period: ${r.dateFrom} to ${r.dateTo} \u00B7 Shows analysed: ${r.totalShows}
+            </p>
+        </div>
+        <div class="kpi-grid" style="grid-template-columns: repeat(auto-fit, minmax(155px, 1fr)); margin-bottom: 20px;">
+            <div class="kpi-card"><div class="kpi-value">${opsFmtMoney(k.totalRevenue)}</div><div class="kpi-label">Tier Revenue</div></div>
+            <div class="kpi-card"><div class="kpi-value">${Number(k.totalTickets || 0).toLocaleString()}</div><div class="kpi-label">Tickets Sold</div></div>
+            <div class="kpi-card"><div class="kpi-value">${opsFmtMoney(k.avgRealisedPrice)}</div><div class="kpi-label">Avg Realised Price</div></div>
+            <div class="kpi-card"><div class="kpi-value">${opsFmtMoney(k.avgBasePrice)}</div><div class="kpi-label">Avg Base Price</div></div>
+            <div class="kpi-card"><div class="kpi-value">${opsFmtMoney(k.pricingUplift)} (${pct(k.pricingUpliftPct)})</div><div class="kpi-label">Pricing Uplift</div></div>
+            <div class="kpi-card"><div class="kpi-value">${pct(k.premiumRevenueMixPct)}</div><div class="kpi-label">Premium Revenue Mix</div></div>
+            <div class="kpi-card"><div class="kpi-value">${opsFmtMoney(k.unsoldInventoryValue)}</div><div class="kpi-label">Unsold Inventory Value</div></div>
+        </div>
+        ${empty ? '<p style="color: var(--text-muted);">No shows with seat data in this scope and period.</p>' : `
+        <h4 style="color: var(--text-primary); margin-bottom: 8px;">Tier Value Summary</h4>
+        <div class="table-wrapper" style="margin-bottom: 20px;">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Tier</th><th>Seats</th><th>Sold</th><th>Occupancy</th>
+                        <th>Revenue</th><th>Ticket Share</th><th>Revenue Share</th>
+                        <th>Avg Realised</th><th>Configured</th><th>Uplift x</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${tiers.map(t => `
+                        <tr>
+                            <td><strong>${t.tier}</strong></td>
+                            <td>${Number(t.seatsTotal).toLocaleString()}</td>
+                            <td>${Number(t.seatsSold).toLocaleString()}</td>
+                            <td>${pct(t.occupancyPct)}</td>
+                            <td>${opsFmtMoney(t.revenue)}</td>
+                            <td>${pct(t.ticketSharePct)}</td>
+                            <td>${pct(t.revenueSharePct)}</td>
+                            <td>${opsFmtMoney(t.avgRealisedPrice)}</td>
+                            <td>${opsFmtMoney(t.configuredPrice)}</td>
+                            <td>${Number(t.upliftMultiple || 0).toFixed(2)}\u00D7</td>
+                        </tr>
+                    `).join('')}
+                </tbody>
+            </table>
+        </div>
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; margin-bottom: 20px;">
+            <div style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; padding: 12px;">
+                <p style="color: var(--text-primary); font-size: 13px; margin-bottom: 6px;">Revenue share by tier</p>
+                <canvas id="opsTvfDoughnut" height="220"></canvas>
+            </div>
+            <div style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; padding: 12px;">
+                <p style="color: var(--text-primary); font-size: 13px; margin-bottom: 6px;">Configured vs realised price per tier</p>
+                <canvas id="opsTvfPriceBar" height="220"></canvas>
+            </div>
+        </div>`}
+        ${showMix.length > 0 ? `
+        <h4 style="color: var(--text-primary); margin-bottom: 8px;">Per-Show Tier Mix</h4>
+        <div class="table-wrapper" style="margin-bottom: 16px;">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Show</th><th>Movie</th><th>Screen</th><th>Theatre</th>
+                        <th>Sold</th><th>Occupancy</th><th>Revenue</th><th>Top Tier</th><th>Premium Unsold</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${showMix.map(s => `
+                        <tr>
+                            <td>#${s.showId}</td>
+                            <td>${s.movieTitle}</td>
+                            <td>${s.screenName}</td>
+                            <td>${s.theatreName}</td>
+                            <td>${s.seatsSold}/${s.seatsTotal}</td>
+                            <td>${pct(s.occupancyPct)}</td>
+                            <td>${opsFmtMoney(s.revenue)}</td>
+                            <td>${s.topTier || '-'}</td>
+                            <td>${s.premiumUnsold ? '\u26A0\uFE0F ' + opsFmtMoney(s.premiumUnsoldValue) : '-'}</td>
+                        </tr>
+                    `).join('')}
+                </tbody>
+            </table>
+        </div>` : ''}
+        <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+            <button class="btn btn-primary btn-sm" onclick="opsSaveTierValueReport()">\uD83D\uDCBE Save Report</button>
+            <span style="color: var(--text-muted); font-size: 11px;">Generated at: ${r.generatedAt} by ${r.generatedBy}</span>
+        </div>
+    `;
+
+    if (!empty) {
+        opsDrawTierValueCharts(tiers);
+    }
+}
+
+function opsDrawTierValueCharts(tiers) {
+    if (typeof Chart === 'undefined') return;
+
+    const palette = ['#7c4dff', '#ffab00', '#00e5ff', '#76ff03', '#ff4081', '#ff6d00', '#40c4ff', '#b388ff'];
+    const labels = tiers.map(t => t.tier);
+
+    const doughnut = document.getElementById('opsTvfDoughnut');
+    if (doughnut) {
+        if (opsTvfDoughnut) opsTvfDoughnut.destroy();
+        opsTvfDoughnut = new Chart(doughnut.getContext('2d'), {
+            type: 'doughnut',
+            data: {
+                labels,
+                datasets: [{
+                    data: tiers.map(t => Number(t.revenue || 0)),
+                    backgroundColor: palette,
+                    borderWidth: 0
+                }]
+            },
+            options: {
+                plugins: {
+                    legend: { position: 'right', labels: { color: '#cfd2da', boxWidth: 12, font: { size: 11 } } },
+                    tooltip: { callbacks: { label: ctx => ctx.label + ': ' + opsFmtMoney(ctx.parsed) } }
+                }
+            }
+        });
+    }
+
+    const bar = document.getElementById('opsTvfPriceBar');
+    if (bar) {
+        if (opsTvfPriceBar) opsTvfPriceBar.destroy();
+        opsTvfPriceBar = new Chart(bar.getContext('2d'), {
+            type: 'bar',
+            data: {
+                labels,
+                datasets: [
+                    { label: 'Configured price', data: tiers.map(t => Number(t.configuredPrice || 0)), backgroundColor: '#7c4dff' },
+                    { label: 'Realised price', data: tiers.map(t => Number(t.avgRealisedPrice || 0)), backgroundColor: '#00e5ff' }
+                ]
+            },
+            options: {
+                scales: {
+                    x: { ticks: { color: '#cfd2da', font: { size: 11 } }, grid: { color: 'rgba(255,255,255,0.06)' } },
+                    y: { ticks: { color: '#cfd2da', font: { size: 11 }, callback: v => '\u20B9' + v }, grid: { color: 'rgba(255,255,255,0.06)' } }
+                },
+                plugins: {
+                    legend: { labels: { color: '#cfd2da', boxWidth: 12, font: { size: 11 } } }
+                }
+            }
+        });
+    }
+}
+
+async function opsSaveTierValueReport() {
+    const p = opsTvfLastParams || {};
+    const theatreId = p.theatreId ? Number(p.theatreId) : null;
+    await opsGenerateReport('TIER_VALUE_REPORT', null, theatreId, null, {
+        dateFrom: p.dateFrom || null,
+        dateTo: p.dateTo || null
+    });
+}
+
 // ================= TICKET HOLDERS =================
 
 let opsTHHolders = [];   // holders for the show currently selected in the dropdown
@@ -1321,9 +1545,9 @@ async function opsLoadReportsList() {
     }
 }
 
-async function opsGenerateReport(reportType, showId, theatreId, incidentId) {
+async function opsGenerateReport(reportType, showId, theatreId, incidentId, extra = null) {
     try {
-        const body = { reportType, showId: showId || null, theatreId: theatreId || null, incidentId: incidentId || null };
+        const body = { reportType, showId: showId || null, theatreId: theatreId || null, incidentId: incidentId || null, ...(extra || {}) };
         const result = await opsApiCall('/reports/generate', 'POST', body);
         alert('Report generated successfully. ID: ' + result.data.id);
         opsLoadReportsList();
@@ -1400,7 +1624,8 @@ function formatReportType(type) {
         'SHOW_REPORT': 'Show Report',
         'THEATRE_REPORT': 'Theatre Report',
         'TICKET_HOLDER_REPORT': 'Ticket Holders',
-        'INCIDENT_REPORT': 'Incident Report'
+        'INCIDENT_REPORT': 'Incident Report',
+        'TIER_VALUE_REPORT': '💎 Tier Value'
     };
     return map[type] || type;
 }

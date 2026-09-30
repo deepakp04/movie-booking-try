@@ -5,6 +5,7 @@ import com.moviebooking.auth.repository.UserRepository;
 import com.moviebooking.booking.dto.BookingDTOs.*;
 import com.moviebooking.booking.model.Booking;
 import com.moviebooking.booking.model.BookingAttendee;
+import com.moviebooking.booking.model.BookingPaymentMode;
 import com.moviebooking.booking.model.BookingStatus;
 import com.moviebooking.booking.model.SeatStatus;
 import com.moviebooking.booking.model.ShowSeat;
@@ -24,6 +25,8 @@ import com.moviebooking.common.exception.ResourceNotFoundException;
 import com.moviebooking.mail.service.BookingEmailService;
 import com.moviebooking.stream.dto.SeatUpdateEvent;
 import com.moviebooking.stream.service.SeatStreamService;
+import com.moviebooking.voucher.model.Voucher;
+import com.moviebooking.voucher.service.VoucherService;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
@@ -67,6 +70,7 @@ public class BookingService {
     private final ShowPricingService showPricing;
     private final SeatStreamService seatStreamService;
     private final BookingEmailService bookingEmailService;
+    private final VoucherService voucherService;
 
     public BookingService(ShowRepository showRepository,
                            ShowSeatRepository showSeatRepository,
@@ -76,7 +80,8 @@ public class BookingService {
                            ScreenSeatRepository screenSeatRepository,
                            ShowPricingService showPricing,
                            SeatStreamService seatStreamService,
-                           BookingEmailService bookingEmailService) {
+                           BookingEmailService bookingEmailService,
+                           VoucherService voucherService) {
         this.showRepository = showRepository;
         this.showSeatRepository = showSeatRepository;
         this.bookingRepository = bookingRepository;
@@ -86,6 +91,7 @@ public class BookingService {
         this.showPricing = showPricing;
         this.seatStreamService = seatStreamService;
         this.bookingEmailService = bookingEmailService;
+        this.voucherService = voucherService;
     }
 
     private User currentUser() {
@@ -426,7 +432,16 @@ public class BookingService {
                 .map(s -> s.getPrice() != null ? s.getPrice() : show.getBasePrice())
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
-        LocalDateTime expiry = now.plusMinutes(HOLD_MINUTES);
+        // ------------------------------------------------------------------
+        // Voucher redemption: a valid code settles the booking immediately and
+        // the payment gateway is skipped entirely.
+        // ------------------------------------------------------------------
+        Voucher voucher = null;
+        if (req.voucherCode() != null && !req.voucherCode().isBlank()) {
+            voucher = voucherService.lockForBooking(req.voucherCode(), user, codesList.size());
+        }
+
+        LocalDateTime expiry = voucher != null ? null : now.plusMinutes(HOLD_MINUTES);
 
         // ------------------------------------------------------------------
         // Save booking
@@ -437,9 +452,17 @@ public class BookingService {
         booking.setSeatCodes(String.join(",", codesList));
         booking.setNumberOfSeats(codesList.size());
         booking.setTotalAmount(total);
-        booking.setStatus(BookingStatus.PENDING_PAYMENT);
         booking.setTransactionId(UUID.randomUUID().toString());
-        booking.setHoldExpiresAt(expiry);
+        if (voucher != null) {
+            booking.setStatus(BookingStatus.CONFIRMED);
+            booking.setPaymentMode(BookingPaymentMode.VOUCHER);
+            booking.setVoucher(voucher);
+            booking.setVoucherCode(voucher.getCode());
+            booking.setHoldExpiresAt(null);
+        } else {
+            booking.setStatus(BookingStatus.PENDING_PAYMENT);
+            booking.setHoldExpiresAt(expiry);
+        }
         Booking savedBooking = bookingRepository.save(booking);
 
         // Save attendees
@@ -455,17 +478,37 @@ public class BookingService {
         }
         attendeeRepository.saveAll(savedBooking.getAttendees());
 
-        // Hold seats
+        // Hold seats (or book them outright for a voucher booking)
         for (ShowSeat s : lockedSeats) {
-            s.setStatus(SeatStatus.HELD);
-            s.setHeldByUserId(user.getId());
-            s.setHoldExpiresAt(expiry);
             s.setBookingId(savedBooking.getId());
-            
-            seatStreamService.broadcastSeatUpdate(show.getId(),
-                new SeatUpdateEvent(show.getId(), s.getSeatCode(), "HELD", user.getId(), true, "HELD", s.getPrice()));
+            if (voucher != null) {
+                s.setStatus(SeatStatus.BOOKED);
+                s.setHeldByUserId(null);
+                s.setHoldExpiresAt(null);
+                seatStreamService.broadcastSeatUpdate(show.getId(),
+                    new SeatUpdateEvent(show.getId(), s.getSeatCode(), "BOOKED", null, null, "VOUCHER", s.getPrice()));
+            } else {
+                s.setStatus(SeatStatus.HELD);
+                s.setHeldByUserId(user.getId());
+                s.setHoldExpiresAt(expiry);
+                seatStreamService.broadcastSeatUpdate(show.getId(),
+                    new SeatUpdateEvent(show.getId(), s.getSeatCode(), "HELD", user.getId(), true, "HELD", s.getPrice()));
+            }
         }
         showSeatRepository.saveAll(lockedSeats);
+
+        if (voucher != null) {
+            // Debit the free tickets, write the ledger row and queue the balance email.
+            voucherService.applyRedemption(voucher, savedBooking, codesList.size(), total);
+
+            // Confirmation email (voucher-aware); email failure must never undo the booking.
+            try {
+                bookingEmailService.queueConfirmationEmail(savedBooking);
+            } catch (Exception emailEx) {
+                log.error("Failed to queue voucher confirmation email for booking {}: {}",
+                        savedBooking.getId(), emailEx.getMessage(), emailEx);
+            }
+        }
 
         return toBookingResponse(savedBooking, lockedSeats);
     }
@@ -541,6 +584,16 @@ public class BookingService {
 
         booking.setStatus(BookingStatus.CANCELLED);
         bookingRepository.save(booking);
+
+        // Voucher bookings: return the free tickets so cancelling doesn't burn them.
+        if (booking.getVoucher() != null) {
+            try {
+                voucherService.restoreOnCancellation(booking);
+            } catch (Exception restoreEx) {
+                log.error("Failed to restore voucher free tickets for booking {}: {}",
+                        booking.getId(), restoreEx.getMessage(), restoreEx);
+            }
+        }
 
         // Send cancellation email only for CONFIRMED bookings (paid bookings)
         // Wrapped in try-catch: email failure must NOT prevent cancellation
@@ -634,7 +687,10 @@ public class BookingService {
                 b.getTotalAmount(),
                 b.getStatus(),
                 b.getHoldExpiresAt(),
-                mapAttendees(b)
+                mapAttendees(b),
+                b.effectivePaymentMode().name(),
+                b.isVoucherBooking() ? b.getVoucherCode() : null,
+                b.isVoucherBooking() ? b.getNumberOfSeats() : null
         );
     }
 
@@ -660,7 +716,10 @@ public class BookingService {
                 b.getTotalAmount(),
                 b.getStatus(),
                 b.getHoldExpiresAt(),
-                mapAttendees(b)
+                mapAttendees(b),
+                b.effectivePaymentMode().name(),
+                b.isVoucherBooking() ? b.getVoucherCode() : null,
+                b.isVoucherBooking() ? b.getNumberOfSeats() : null
         );
     }
 }

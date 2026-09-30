@@ -47,6 +47,9 @@ public class SecurityConfig {
                 // Booking API - requires authentication
                 .requestMatchers("/api/booking/**").authenticated()
 
+                // Ticket vouchers - any signed-in customer can see/redeem their own code
+                .requestMatchers("/api/voucher/**").authenticated()
+
                 // ===== Scoped rules first, wildcards last =====
                 // The owner analytics bar calls /api/owner/analytics/**, and it must
                 // stay reachable for a THEATRE_OWNER and for an admin using the owner

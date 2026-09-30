@@ -69,7 +69,10 @@ public class BookingDTOs {
     public record HoldSeatsRequest(
         Long showId,
         List<String> seatCodes,
-        List<AttendeeInfo> attendees
+        List<AttendeeInfo> attendees,
+        // Optional: when present, the booking is settled with the user's ticket
+        // voucher and skips the payment gateway altogether.
+        String voucherCode
     ) {}
 
     /** Per-seat breakdown so the checkout screen can itemize a tiered basket. */
@@ -93,6 +96,11 @@ public class BookingDTOs {
         BigDecimal totalAmount,
         BookingStatus status,
         LocalDateTime holdExpiresAt,
-        List<AttendeeInfo> attendees
+        List<AttendeeInfo> attendees,
+        // PAYMENT_GATEWAY | VOUCHER — drives the "booked via voucher" badge in
+        // the booking history and suppresses the pay button on pending holds.
+        String paymentMode,
+        String voucherCode,
+        Integer voucherTicketsUsed
     ) {}
 }

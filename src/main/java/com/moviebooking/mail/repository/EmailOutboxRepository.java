@@ -32,6 +32,16 @@ public interface EmailOutboxRepository extends JpaRepository<EmailOutbox, Long> 
     );
 
     /**
+     * Duplicate prevention for voucher lifecycle emails (e.g. the "voucher issued"
+     * mail must only go out once unless an admin explicitly resends it).
+     */
+    boolean existsByVoucherIdAndEmailTypeAndStatusIn(
+            Long voucherId,
+            EmailType emailType,
+            List<EmailStatus> statuses
+    );
+
+    /**
      * Find outbox entry by booking and type (for idempotent checks).
      */
     Optional<EmailOutbox> findTopByBookingIdAndEmailTypeOrderByIdDesc(

@@ -95,6 +95,23 @@ body {
     border-left: 3px solid var(--primary-gold);
 }
 
+/* Small counter that flags customers waiting for a voucher on the Vouchers tab. */
+.nav-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 20px;
+    height: 20px;
+    padding: 0 6px;
+    margin-left: 6px;
+    border-radius: 999px;
+    background-color: #e5b80b;
+    color: #1a1204;
+    font-size: 0.72rem;
+    font-weight: 700;
+    vertical-align: middle;
+}
+
 .content-area {
     flex: 1;
     padding: 32px;

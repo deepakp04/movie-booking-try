@@ -479,15 +479,23 @@ async function loadMyBookings() {
             
             const seatCodes = booking.seatCodes.join(', ');
             const totalAmount = booking.totalAmount;
+            const isVoucherBooking = booking.paymentMode === 'VOUCHER';
 
             html += `
-                <div class="booking-card" style="border: 1px solid #3f3f46; border-radius: 8px; padding: 16px; margin-bottom: 16px; background: #18181b;">
+                <div class="booking-card" style="border: 1px solid ${isVoucherBooking ? '#e5b80b' : '#3f3f46'}; border-radius: 8px; padding: 16px; margin-bottom: 16px; background: #18181b;">
                     <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 12px;">
                         <div>
                             <h3 style="margin: 0 0 4px 0; color: #e4e4e7; font-size: 1.1rem;">${escapeHtml(booking.movieTitle)}</h3>
                             <p style="margin: 0; color: #a1a1aa; font-size: 0.875rem;">${escapeHtml(booking.theatreName)} - ${escapeHtml(booking.screenName)}</p>
                         </div>
-                        <span class="badge ${statusClass}" style="padding: 4px 12px; border-radius: 999px; font-size: 0.75rem; font-weight: 600;">${statusLabel}</span>
+                        <div style="text-align: right;">
+                            <span class="badge ${statusClass}" style="padding: 4px 12px; border-radius: 999px; font-size: 0.75rem; font-weight: 600;">${statusLabel}</span>
+                            ${isVoucherBooking ? `
+                                <div style="margin-top: 6px;">
+                                    <span style="display: inline-block; padding: 3px 10px; border-radius: 999px; font-size: 0.7rem; font-weight: 600; background: rgba(229,184,11,0.15); color: #e5b80b; border: 1px solid #e5b80b;">🎟️ Booked via Voucher</span>
+                                </div>
+                            ` : ''}
+                        </div>
                     </div>
                     
                     <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 12px;">
@@ -501,12 +509,18 @@ async function loadMyBookings() {
                         </div>
                         <div>
                             <p style="margin: 0; color: #71717a; font-size: 0.75rem;">TOTAL</p>
-                            <p style="margin: 4px 0 0 0; color: #e4e4e7; font-size: 0.875rem;">₹ ${totalAmount}</p>
+                            <p style="margin: 4px 0 0 0; color: ${isVoucherBooking ? '#b9f6ca' : '#e4e4e7'}; font-size: 0.875rem;">${isVoucherBooking ? '₹ 0 — paid by voucher' : '₹ ' + totalAmount}</p>
                         </div>
                         <div>
                             <p style="margin: 0; color: #71717a; font-size: 0.75rem;">TRANSACTION ID</p>
                             <p style="margin: 4px 0 0 0; color: #e4e4e7; font-size: 0.75rem; word-break: break-all;">${escapeHtml(booking.transactionId)}</p>
                         </div>
+                        ${isVoucherBooking ? `
+                        <div>
+                            <p style="margin: 0; color: #71717a; font-size: 0.75rem;">VOUCHER</p>
+                            <p style="margin: 4px 0 0 0; color: #e5b80b; font-size: 0.875rem;">${escapeHtml(booking.voucherCode || '—')} · ${booking.voucherTicketsUsed || booking.numberOfSeats} free ticket(s)</p>
+                        </div>
+                        ` : ''}
                     </div>
 
                     ${booking.holdExpiresAt && booking.status === 'PENDING_PAYMENT' ? `

@@ -990,3 +990,218 @@ body {
     text-align: center;
     text-decoration: none;
 }
+
+/* =========================================
+   TICKET VOUCHER — marquee, info box,
+   seat-page voucher field, exception dialog
+   ========================================= */
+
+/* Landing-page marquee: only rendered for signed-in customers whose voucher
+   still has free tickets left. */
+.voucher-marquee {
+    position: relative;
+    overflow: hidden;
+    background: linear-gradient(90deg, #a97e05, #e5b80b 30%, #fbe38a 50%, #e5b80b 70%, #a97e05);
+    color: #1a1204;
+    border-bottom: 1px solid #8a6d05;
+    cursor: pointer;
+    padding: 9px 0;
+    font-size: 0.88rem;
+    font-weight: 700;
+    letter-spacing: 0.4px;
+    user-select: none;
+}
+
+.voucher-marquee:hover .voucher-marquee-track,
+.voucher-marquee:focus .voucher-marquee-track {
+    animation-play-state: paused;
+}
+
+.voucher-marquee:focus {
+    outline: 2px solid #fbe38a;
+    outline-offset: -2px;
+}
+
+.voucher-marquee-track {
+    display: inline-block;
+    white-space: nowrap;
+    padding-left: 100%;
+    animation: voucher-marquee-scroll 24s linear infinite;
+}
+
+@keyframes voucher-marquee-scroll {
+    from { transform: translateX(0); }
+    to { transform: translateX(-100%); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .voucher-marquee-track { animation: none; padding-left: 16px; }
+}
+
+/* Voucher box on the seat-selection page */
+.voucher-apply-card {
+    max-width: 760px;
+    margin: 0 auto 22px;
+    background-color: var(--card-bg);
+    border: 1px dashed var(--primary-gold);
+    border-radius: 10px;
+    padding: 16px 18px;
+}
+
+.voucher-apply-card.applied {
+    border-style: solid;
+    box-shadow: 0 0 0 1px rgba(229, 184, 11, 0.35);
+}
+
+.voucher-apply-title {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+    font-weight: 600;
+    margin-bottom: 10px;
+}
+
+.voucher-apply-balance {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    font-weight: 500;
+}
+
+.voucher-apply-row {
+    display: flex;
+    gap: 10px;
+    align-items: stretch;
+}
+
+.voucher-code-input {
+    flex: 1;
+    min-width: 0;
+    background: #0b0c0e;
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    padding: 10px 12px;
+    color: var(--text-main);
+    font-family: 'Consolas', 'Menlo', monospace;
+    font-size: 0.95rem;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+}
+
+.voucher-code-input::placeholder {
+    letter-spacing: 0.5px;
+    color: #5b616e;
+    text-transform: none;
+}
+
+.voucher-apply-status {
+    margin-top: 9px;
+    font-size: 0.83rem;
+    color: var(--text-muted);
+}
+
+.voucher-apply-status.ok { color: #b9f6ca; }
+.voucher-apply-status.err { color: #ff8a80; }
+
+/* Voucher info box (modal opened from the marquee) */
+.voucher-info-card {
+    max-width: 660px;
+    max-height: 88vh;
+    overflow-y: auto;
+}
+
+.voucher-info-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 14px;
+}
+
+.voucher-info-head h2 { margin: 0; }
+
+.voucher-code-badge {
+    background: #0b0c0e;
+    border: 2px dashed var(--primary-gold);
+    border-radius: 10px;
+    padding: 16px;
+    text-align: center;
+    margin-bottom: 18px;
+}
+
+.voucher-code-label {
+    margin: 0 0 6px;
+    font-size: 0.7rem;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--text-muted);
+}
+
+.voucher-code-value {
+    margin: 0;
+    font-size: 1.6rem;
+    font-weight: 700;
+    letter-spacing: 5px;
+    color: var(--primary-gold);
+    font-family: 'Consolas', 'Menlo', monospace;
+}
+
+.voucher-code-balance {
+    margin: 8px 0 0;
+    font-size: 0.92rem;
+    color: var(--text-main);
+}
+
+.voucher-code-expiry {
+    margin: 4px 0 0;
+    font-size: 0.8rem;
+    color: var(--text-muted);
+}
+
+.voucher-info-section {
+    margin-bottom: 16px;
+}
+
+.voucher-info-section h4 {
+    margin: 0 0 6px;
+    font-size: 0.72rem;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--text-muted);
+}
+
+.voucher-info-section p,
+.voucher-info-section li {
+    font-size: 0.86rem;
+    color: #c9ced6;
+    line-height: 1.7;
+}
+
+.voucher-info-section ol,
+.voucher-info-section ul {
+    margin: 0;
+    padding-left: 20px;
+}
+
+/* Over-limit exception dialog */
+.voucher-error-card {
+    max-width: 480px;
+    border-color: var(--danger-red);
+    box-shadow: 0 0 0 1px rgba(229, 57, 53, 0.4), 0 10px 25px rgba(0, 0, 0, 0.5);
+}
+
+.voucher-error-card h2 {
+    color: #ff8a80;
+}
+
+.voucher-error-message {
+    font-size: 0.92rem;
+    color: #e4e4e7;
+    line-height: 1.6;
+    background: rgba(229, 57, 53, 0.1);
+    border: 1px solid rgba(229, 57, 53, 0.5);
+    border-radius: 8px;
+    padding: 12px 14px;
+    margin: 0;
+}

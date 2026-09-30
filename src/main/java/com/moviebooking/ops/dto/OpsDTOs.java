@@ -112,6 +112,59 @@ public class OpsDTOs {
         String generatedBy
     ) {}
 
+    // ================= TIER VALUE REPORT =================
+
+    public record TierValueResponse(
+        String scopeName,
+        String dateFrom,
+        String dateTo,
+        Integer totalShows,
+        TierValueKpis kpis,
+        List<TierValueRow> tiers,
+        List<ShowTierMixRow> showMix,
+        String generatedAt,
+        String generatedBy
+    ) {}
+
+    public record TierValueKpis(
+        BigDecimal totalRevenue,
+        Long totalTickets,
+        BigDecimal avgRealisedPrice,
+        BigDecimal avgBasePrice,
+        BigDecimal pricingUplift,
+        BigDecimal pricingUpliftPct,
+        BigDecimal premiumRevenueMixPct,
+        BigDecimal unsoldInventoryValue
+    ) {}
+
+    public record TierValueRow(
+        String tier,
+        Long seatsTotal,
+        Long seatsSold,
+        BigDecimal occupancyPct,
+        BigDecimal revenue,
+        BigDecimal ticketSharePct,
+        BigDecimal revenueSharePct,
+        BigDecimal avgRealisedPrice,
+        BigDecimal configuredPrice,
+        BigDecimal upliftMultiple
+    ) {}
+
+    public record ShowTierMixRow(
+        Long showId,
+        LocalDateTime startTime,
+        String movieTitle,
+        String screenName,
+        String theatreName,
+        Long seatsSold,
+        Long seatsTotal,
+        BigDecimal occupancyPct,
+        BigDecimal revenue,
+        String topTier,
+        BigDecimal premiumUnsoldValue,
+        Boolean premiumUnsold
+    ) {}
+
     // ================= INCIDENTS =================
 
     public record CreateIncidentRequest(

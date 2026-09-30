@@ -20,8 +20,11 @@ import java.time.LocalDateTime;
 @NoArgsConstructor
 public class EmailOutbox extends BaseEntity {
 
-    @Column(nullable = false)
+    /** Booking this email is about. Null for voucher lifecycle emails. */
     private Long bookingId;
+
+    /** Voucher this email is about. Null for booking emails. */
+    private Long voucherId;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 30)
@@ -53,7 +56,9 @@ public class EmailOutbox extends BaseEntity {
 
     public enum EmailType {
         BOOKING_CONFIRMED,
-        BOOKING_CANCELLED
+        BOOKING_CANCELLED,
+        VOUCHER_ISSUED,
+        VOUCHER_REDEEMED
     }
 
     public enum EmailStatus {

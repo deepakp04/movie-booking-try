@@ -61,6 +61,7 @@ document.addEventListener('DOMContentLoaded', () => {
         loadMovies();
         loadTheatres();
         loadShows();
+        voucherLoadBadge(); // tell the admin when customers are waiting for a voucher
     }
 });
 
@@ -191,6 +192,11 @@ function switchTab(tabId) {
     // Initialize operations tab on first visit
     if (tabId === 'operationsTab' && typeof opsInit === 'function') {
         opsInit();
+    }
+
+    // Initialize vouchers tab on every visit so the list is never stale
+    if (tabId === 'vouchersTab' && typeof vouchersInit === 'function') {
+        vouchersInit();
     }
 }
 
@@ -1899,4 +1905,298 @@ function collectTierPrices() {
         }
     });
     return out;
+}
+
+// =========================================
+// TICKET VOUCHERS TAB
+// =========================================
+
+let voucherEligibleUsers = [];            // customers the server currently marks eligible
+let voucherSelectedIds = new Set();       // handpicked or select-all customer ids
+let vouchersInitialized = false;
+
+function vouchersInit() {
+    if (vouchersInitialized) {
+        voucherLoadEligible();
+        voucherLoadList();
+        return;
+    }
+    vouchersInitialized = true;
+    voucherLoadEligible();
+    voucherLoadList();
+    voucherLoadBadge();
+}
+
+/** Sidebar notification: how many customers are waiting for a voucher. */
+async function voucherLoadBadge() {
+    const badge = document.getElementById('voucherEligibleBadge');
+    if (!badge) return;
+    try {
+        const res = await adminApiCall('/vouchers/eligible');
+        const count = (res && res.data ? res.data : []).length;
+        if (count > 0) {
+            badge.textContent = count;
+            badge.title = count + ' customer(s) eligible for a voucher';
+            badge.classList.remove('hidden');
+        } else {
+            badge.classList.add('hidden');
+        }
+    } catch (err) {
+        badge.classList.add('hidden');
+    }
+}
+
+function voucherEsc(value) {
+    if (value === null || value === undefined) return '';
+    return String(value)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+function voucherMoney(value) {
+    const n = Number(value || 0);
+    return n.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function voucherDate(value) {
+    if (!value) return '—';
+    return new Date(value).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' });
+}
+
+/** expiresAt is the invalid moment; the table shows the last usable second. */
+function voucherValidUntil(value) {
+    if (!value) return '—';
+    return voucherDate(new Date(new Date(value).getTime() - 1000).toISOString());
+}
+
+function voucherStatusChip(status) {
+    switch (status) {
+        case 'ACTIVE':
+            return '<span class="badge badge-success">Active</span>';
+        case 'EXHAUSTED':
+            return '<span class="badge badge-warning">Completed</span>';
+        case 'EXPIRED':
+            return '<span class="badge badge-danger">Expired</span>';
+        default:
+            return `<span class="badge badge-info">${voucherEsc(status)}</span>`;
+    }
+}
+
+// ---------- Eligible customers ----------
+
+async function voucherLoadEligible() {
+    const tbody = document.getElementById('voucherEligibleBody');
+    if (!tbody) return;
+    tbody.innerHTML = '<tr><td colspan="8" style="color: var(--text-muted);">Loading eligible customers…</td></tr>';
+
+    try {
+        const res = await adminApiCall('/vouchers/eligible');
+        voucherEligibleUsers = (res && res.data) ? res.data : [];
+
+        // Drop selections for customers who are no longer eligible.
+        const eligibleIds = new Set(voucherEligibleUsers.map(u => u.userId));
+        [...voucherSelectedIds].forEach(id => { if (!eligibleIds.has(id)) voucherSelectedIds.delete(id); });
+
+        voucherRenderEligible();
+        voucherLoadBadge();
+    } catch (err) {
+        tbody.innerHTML = '<tr><td colspan="8" style="color: #ff8a80;">Failed to load eligible customers.</td></tr>';
+    }
+}
+
+function voucherRenderEligible() {
+    const tbody = document.getElementById('voucherEligibleBody');
+    const countEl = document.getElementById('voucherEligibleCount');
+    if (!tbody) return;
+
+    const term = (document.getElementById('voucherEligibleSearch')?.value || '').trim().toLowerCase();
+    const rows = voucherEligibleUsers.filter(u => {
+        if (!term) return true;
+        return [u.name, u.email, u.phone].filter(Boolean).some(v => String(v).toLowerCase().includes(term));
+    });
+
+    if (countEl) {
+        countEl.textContent = `${rows.length} eligible customer(s) — lifetime paid spend over ₹10,000 with no active voucher`;
+    }
+
+    if (rows.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="8" style="color: var(--text-muted);">No eligible customers right now. Customers appear here automatically once their paid spend crosses ₹10,000.</td></tr>';
+    } else {
+        tbody.innerHTML = rows.map(u => `
+            <tr>
+                <td><input type="checkbox" class="voucher-eligible-check" value="${u.userId}"
+                        ${voucherSelectedIds.has(u.userId) ? 'checked' : ''}
+                        onchange="voucherToggleOne(${u.userId}, this.checked)"></td>
+                <td><strong>${voucherEsc(u.name)}</strong></td>
+                <td>${voucherEsc(u.email)}</td>
+                <td>${voucherEsc(u.phone || '—')}</td>
+                <td>₹${voucherMoney(u.lifetimeSpend)}</td>
+                <td>${u.confirmedBookings}</td>
+                <td>${voucherDate(u.lastBookingAt)}</td>
+                <td>${u.previousVouchers
+                        ? `${u.previousVouchers} issued · ${voucherStatusChip(u.previousVoucherStatus)}`
+                        : '<span style="color: var(--text-muted);">None yet</span>'}</td>
+            </tr>
+        `).join('');
+    }
+
+    const selectAll = document.getElementById('voucherSelectAll');
+    if (selectAll) {
+        const boxes = [...document.querySelectorAll('.voucher-eligible-check')];
+        selectAll.checked = boxes.length > 0 && boxes.every(b => b.checked);
+    }
+    voucherUpdateSelectedCount();
+}
+
+function voucherToggleOne(userId, checked) {
+    if (checked) voucherSelectedIds.add(userId);
+    else voucherSelectedIds.delete(userId);
+
+    const selectAll = document.getElementById('voucherSelectAll');
+    if (selectAll) {
+        const boxes = [...document.querySelectorAll('.voucher-eligible-check')];
+        selectAll.checked = boxes.length > 0 && boxes.every(b => b.checked);
+    }
+    voucherUpdateSelectedCount();
+}
+
+function voucherToggleSelectAll(checked) {
+    document.querySelectorAll('.voucher-eligible-check').forEach(box => {
+        box.checked = checked;
+        const id = parseInt(box.value, 10);
+        if (checked) voucherSelectedIds.add(id);
+        else voucherSelectedIds.delete(id);
+    });
+    voucherUpdateSelectedCount();
+}
+
+function voucherUpdateSelectedCount() {
+    const el = document.getElementById('voucherSelectedCount');
+    if (!el) return;
+    el.textContent = voucherSelectedIds.size > 0
+        ? `${voucherSelectedIds.size} customer(s) selected`
+        : 'No customers selected';
+}
+
+async function voucherSendSelected() {
+    if (voucherSelectedIds.size === 0) {
+        showAlert('Select at least one eligible customer first.', 'error');
+        return;
+    }
+
+    const count = voucherSelectedIds.size;
+    if (!confirm(`Approve and send a voucher — 4 free tickets, valid 30 days — to ${count} customer(s)?\n\nEach customer receives a unique account-bound code by email.`)) {
+        return;
+    }
+
+    const btn = document.getElementById('voucherSendBtn');
+    if (btn) { btn.disabled = true; btn.textContent = 'Sending…'; }
+
+    try {
+        const res = await adminApiCall('/vouchers/issue', 'POST', { userIds: [...voucherSelectedIds] });
+        const data = (res && res.data) ? res.data : {};
+
+        const resultEl = document.getElementById('voucherIssueResult');
+        if (resultEl) {
+            if (data.messages && data.messages.length > 0) {
+                resultEl.innerHTML = `<div class="alert alert-error" style="margin:0;">
+                    <strong>${data.issued || 0} sent, ${data.skipped || 0} skipped</strong>
+                    <ul style="margin: 8px 0 0 18px;">${data.messages.map(m => `<li>${voucherEsc(m)}</li>`).join('')}</ul>
+                </div>`;
+            } else {
+                resultEl.innerHTML = `<div class="alert alert-success" style="margin:0;">
+                    ${data.issued || 0} voucher(s) issued — the codes have been queued for email delivery.
+                </div>`;
+            }
+        }
+
+        showAlert(res && res.message ? res.message : 'Vouchers processed.', data.issued > 0 ? 'success' : 'error');
+        voucherSelectedIds.clear();
+        await voucherLoadEligible();
+        await voucherLoadList();
+    } catch (err) {
+        // adminApiCall already surfaced the error banner.
+    } finally {
+        if (btn) { btn.disabled = false; btn.textContent = '📨 Approve & Send Vouchers'; }
+    }
+}
+
+// ---------- Issued vouchers table ----------
+
+async function voucherLoadList() {
+    const tbody = document.getElementById('voucherTableBody');
+    if (!tbody) return;
+    tbody.innerHTML = '<tr><td colspan="13" style="color: var(--text-muted);">Loading vouchers…</td></tr>';
+
+    const status = document.getElementById('voucherStatusFilter')?.value || '';
+    const search = document.getElementById('voucherSearchBox')?.value || '';
+    const completed = document.getElementById('voucherCompletedOnly')?.value === 'true';
+
+    try {
+        const res = await adminApiCall(`/vouchers?status=${encodeURIComponent(status)}&search=${encodeURIComponent(search)}&completed=${completed}`);
+        const data = (res && res.data) ? res.data : {};
+        voucherRenderKpis(data.stats || {});
+        voucherRenderTable(data.vouchers || []);
+    } catch (err) {
+        tbody.innerHTML = '<tr><td colspan="13" style="color: #ff8a80;">Failed to load vouchers.</td></tr>';
+    }
+}
+
+function voucherRenderKpis(stats) {
+    const grid = document.getElementById('voucherKpiGrid');
+    if (!grid) return;
+    grid.innerHTML = `
+        <div class="kpi-card"><div class="kpi-value">${stats.eligibleUsers || 0}</div><div class="kpi-label">Eligible Now</div></div>
+        <div class="kpi-card"><div class="kpi-value">${stats.activeVouchers || 0}</div><div class="kpi-label">Active Vouchers</div></div>
+        <div class="kpi-card"><div class="kpi-value">${stats.freeTicketsRemaining || 0}</div><div class="kpi-label">Free Tickets Left</div></div>
+        <div class="kpi-card"><div class="kpi-value">${stats.freeTicketsRedeemed || 0}</div><div class="kpi-label">Free Tickets Used</div></div>
+        <div class="kpi-card"><div class="kpi-value">${stats.completedUsers || 0}</div><div class="kpi-label">Vouchers Fully Used</div></div>
+        <div class="kpi-card"><div class="kpi-value">₹${voucherMoney(stats.valueRedeemed)}</div><div class="kpi-label">Value Redeemed</div></div>
+        <div class="kpi-card"><div class="kpi-value">${stats.expiredVouchers || 0}</div><div class="kpi-label">Expired Vouchers</div></div>
+    `;
+}
+
+function voucherRenderTable(rows) {
+    const tbody = document.getElementById('voucherTableBody');
+    const countEl = document.getElementById('voucherTableCount');
+    if (!tbody) return;
+
+    if (countEl) countEl.textContent = `${rows.length} voucher(s) shown`;
+
+    if (rows.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="13" style="color: var(--text-muted);">No vouchers match these filters yet.</td></tr>';
+        return;
+    }
+
+    tbody.innerHTML = rows.map(v => `
+        <tr>
+            <td><strong>${voucherEsc(v.userName)}</strong></td>
+            <td>${voucherEsc(v.userEmail)}</td>
+            <td style="font-family: monospace; color: #e5b80b; font-weight: 600;">${voucherEsc(v.code)}</td>
+            <td>${v.totalFreeTickets}</td>
+            <td>${v.remainingFreeTickets > 0
+                    ? `<strong style="color: #b9f6ca;">${v.remainingFreeTickets}</strong>`
+                    : '<span style="color: var(--text-muted);">0</span>'}</td>
+            <td>${v.ticketsUsed}</td>
+            <td>₹${voucherMoney(v.valueRedeemed)}</td>
+            <td>${v.redemptionCount}</td>
+            <td>${voucherStatusChip(v.status)}</td>
+            <td>${voucherDate(v.issuedAt)}</td>
+            <td>${voucherValidUntil(v.expiresAt)}</td>
+            <td>${v.completedAt
+                    ? '✅ ' + voucherDate(v.completedAt)
+                    : (v.lastUsedAt ? voucherDate(v.lastUsedAt) : '—')}</td>
+            <td><button class="btn btn-secondary btn-sm" onclick="voucherResendEmail(${v.voucherId})">Resend Email</button></td>
+        </tr>
+    `).join('');
+}
+
+async function voucherResendEmail(voucherId) {
+    if (!confirm('Resend the voucher email with the code to this customer?')) return;
+    try {
+        const res = await adminApiCall(`/vouchers/${voucherId}/resend`, 'POST');
+        showAlert(res && res.message ? res.message : 'Voucher email queued for resend.', 'success');
+    } catch (err) {
+        // adminApiCall already surfaced the error banner.
+    }
 }

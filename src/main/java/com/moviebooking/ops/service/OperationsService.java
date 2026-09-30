@@ -9,9 +9,13 @@ import com.moviebooking.booking.model.ShowSeat;
 import com.moviebooking.booking.repository.BookingAttendeeRepository;
 import com.moviebooking.booking.repository.BookingRepository;
 import com.moviebooking.booking.repository.ShowSeatRepository;
+import com.moviebooking.catalog.model.City;
 import com.moviebooking.catalog.model.Show;
+import com.moviebooking.catalog.model.ShowTierPrice;
 import com.moviebooking.catalog.model.Theatre;
+import com.moviebooking.catalog.repository.CityRepository;
 import com.moviebooking.catalog.repository.ShowRepository;
+import com.moviebooking.catalog.repository.ShowTierPriceRepository;
 import com.moviebooking.catalog.repository.TheatreRepository;
 import com.moviebooking.common.exception.BusinessException;
 import com.moviebooking.common.exception.ResourceNotFoundException;
@@ -30,8 +34,11 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 
 @Service
 @Transactional(readOnly = true)
@@ -47,6 +54,8 @@ public class OperationsService {
     private final PaymentTransactionRepository paymentRepository;
     private final UserRepository userRepository;
     private final BookingAttendeeRepository attendeeRepository;
+    private final ShowTierPriceRepository showTierPriceRepository;
+    private final CityRepository cityRepository;
 
     public OperationsService(ShowRepository showRepository,
                              TheatreRepository theatreRepository,
@@ -54,7 +63,9 @@ public class OperationsService {
                              ShowSeatRepository showSeatRepository,
                              PaymentTransactionRepository paymentRepository,
                              UserRepository userRepository,
-                             BookingAttendeeRepository attendeeRepository) {
+                             BookingAttendeeRepository attendeeRepository,
+                             ShowTierPriceRepository showTierPriceRepository,
+                             CityRepository cityRepository) {
         this.showRepository = showRepository;
         this.theatreRepository = theatreRepository;
         this.bookingRepository = bookingRepository;
@@ -62,6 +73,8 @@ public class OperationsService {
         this.paymentRepository = paymentRepository;
         this.userRepository = userRepository;
         this.attendeeRepository = attendeeRepository;
+        this.showTierPriceRepository = showTierPriceRepository;
+        this.cityRepository = cityRepository;
     }
 
     // ================= SHOW REPORT =================
@@ -368,8 +381,12 @@ public class OperationsService {
                         seat.price(),
                         booking.getCreatedAt(),
                         booking.getStatus().name(),
-                        tx != null ? tx.getStatus().name() : "N/A",
-                        tx != null ? tx.getRazorpayPaymentId() : null
+                        // Voucher bookings have no gateway transaction — surface the
+                        // voucher itself so ticket-holder reports stay meaningful.
+                        tx != null ? tx.getStatus().name()
+                                : (booking.isVoucherBooking() ? "VOUCHER" : "N/A"),
+                        tx != null ? tx.getRazorpayPaymentId()
+                                : (booking.isVoucherBooking() ? booking.getVoucherCode() : null)
                 ));
             }
         }
@@ -392,6 +409,313 @@ public class OperationsService {
         if (restrictToTheatreId != null && !actualTheatreId.equals(restrictToTheatreId)) {
             throw new BusinessException("Access denied: show does not belong to your theatre.");
         }
+    }
+
+    // ================= TIER VALUE REPORT =================
+
+    /**
+     * Business value of each pricing tier across the chosen scope: seats sold,
+     * revenue and share mix, realised vs configured pricing, uplift multiple vs
+     * the cheapest tier, and unsold inventory valued at list prices.
+     */
+    public TierValueResponse getTierValueReport(String dateFrom, String dateTo, Long cityId, Long theatreId,
+                                                Long screenId, String movieTitle, Long restrictToTheatreId) {
+        if (restrictToTheatreId != null) {
+            if (theatreId != null && !restrictToTheatreId.equals(theatreId)) {
+                throw new BusinessException("Access denied: data does not belong to your theatre.");
+            }
+            theatreId = restrictToTheatreId;
+            cityId = null;
+            screenId = null;
+            movieTitle = null;
+        }
+        if (theatreId != null) {
+            validateTheatreScope(theatreId, restrictToTheatreId);
+        }
+
+        // Effectively-final copies for the stream filters below.
+        final Long scopeTheatreId = theatreId;
+        final Long scopeCityId = cityId;
+        final Long scopeScreenId = screenId;
+        final String scopeMovieTitle = movieTitle;
+
+        LocalDateTime from = (dateFrom != null && !dateFrom.isBlank())
+                ? LocalDate.parse(dateFrom).atStartOfDay()
+                : LocalDate.now().minusDays(30).atStartOfDay();
+        LocalDateTime to = (dateTo != null && !dateTo.isBlank())
+                ? LocalDate.parse(dateTo).atTime(23, 59, 59)
+                : LocalDateTime.now();
+
+        List<Show> shows = showRepository.findByIsDeletedFalseOrderByStartTimeDesc().stream()
+                .filter(s -> s.getScreen() != null && s.getScreen().getTheatre() != null)
+                .filter(s -> !s.getStartTime().isBefore(from) && !s.getStartTime().isAfter(to))
+                .filter(s -> scopeTheatreId == null || s.getScreen().getTheatre().getId().equals(scopeTheatreId))
+                .filter(s -> scopeCityId == null || (s.getScreen().getTheatre().getCity() != null
+                        && s.getScreen().getTheatre().getCity().getId().equals(scopeCityId)))
+                .filter(s -> scopeScreenId == null || s.getScreen().getId().equals(scopeScreenId))
+                .filter(s -> scopeMovieTitle == null || scopeMovieTitle.isBlank()
+                        || (s.getMovie() != null && scopeMovieTitle.equals(s.getMovie().getTitle())))
+                .toList();
+
+        Map<String, TierAccumulator> byTier = new LinkedHashMap<>();
+        BigDecimal totalRevenue = BigDecimal.ZERO;
+        long totalTickets = 0L;
+        BigDecimal basePriceSum = BigDecimal.ZERO;
+        int basePriceCount = 0;
+        BigDecimal unsoldInventoryValue = BigDecimal.ZERO;
+        List<ShowTierMixRow> showMix = new ArrayList<>();
+
+        for (Show show : shows) {
+            List<ShowSeat> seats = showSeatRepository.findByShowId(show.getId());
+            if (seats.isEmpty()) {
+                continue;
+            }
+
+            // Configured (list) price per tier for this show.
+            Map<String, BigDecimal> configuredByTier = new LinkedHashMap<>();
+            for (ShowTierPrice stp : showTierPriceRepository.findByShowIdAndIsDeletedFalse(show.getId())) {
+                if (stp.getSeatTier() != null && stp.getSeatTier().getName() != null && stp.getPrice() != null) {
+                    configuredByTier.put(normalizeTierName(stp.getSeatTier().getName()), stp.getPrice());
+                }
+            }
+
+            Map<String, long[]> seatCounts = new LinkedHashMap<>();   // tier -> [total, sold]
+            Map<String, BigDecimal> tierRevenue = new LinkedHashMap<>();
+            Map<String, BigDecimal> effectivePrice = new LinkedHashMap<>();
+            BigDecimal showRevenue = BigDecimal.ZERO;
+            long showSold = 0L;
+
+            for (ShowSeat seat : seats) {
+                String tier = normalizeTierName(seat.getTierName());
+                long[] counts = seatCounts.computeIfAbsent(tier, k -> new long[2]);
+                counts[0]++;
+                if (seat.getStatus() == SeatStatus.BOOKED) {
+                    counts[1]++;
+                    showSold++;
+                    if (seat.getPrice() != null) {
+                        showRevenue = showRevenue.add(seat.getPrice());
+                        tierRevenue.merge(tier, seat.getPrice(), BigDecimal::add);
+                    }
+                }
+            }
+
+            for (Map.Entry<String, long[]> e : seatCounts.entrySet()) {
+                String tier = e.getKey();
+                long total = e.getValue()[0];
+                long sold = e.getValue()[1];
+                BigDecimal configured = configuredByTier.get(tier);
+                BigDecimal realised = tierRevenue.get(tier);
+
+                // Effective list price: configured -> realised avg -> show base price.
+                BigDecimal effective;
+                if (configured != null) {
+                    effective = configured;
+                } else if (sold > 0 && realised != null) {
+                    effective = realised.divide(BigDecimal.valueOf(sold), 2, RoundingMode.HALF_UP);
+                } else if (show.getBasePrice() != null) {
+                    effective = show.getBasePrice();
+                } else {
+                    effective = null;
+                }
+                if (effective != null) {
+                    effectivePrice.put(tier, effective);
+                }
+
+                long unsold = total - sold;
+                if (unsold > 0 && effective != null) {
+                    unsoldInventoryValue = unsoldInventoryValue.add(
+                            effective.multiply(BigDecimal.valueOf(unsold)));
+                }
+
+                TierAccumulator acc = byTier.computeIfAbsent(tier, k -> new TierAccumulator());
+                acc.seatsTotal += total;
+                acc.seatsSold += sold;
+                acc.revenue = acc.revenue.add(tierRevenue.getOrDefault(tier, BigDecimal.ZERO));
+                if (configured != null) {
+                    acc.configuredSum = acc.configuredSum.add(configured);
+                    acc.configuredCount++;
+                }
+            }
+
+            totalRevenue = totalRevenue.add(showRevenue);
+            totalTickets += showSold;
+            if (show.getBasePrice() != null && show.getBasePrice().compareTo(BigDecimal.ZERO) > 0) {
+                basePriceSum = basePriceSum.add(show.getBasePrice());
+                basePriceCount++;
+            }
+
+            // Top revenue-earning tier for this show.
+            String topTier = "";
+            BigDecimal topRevenue = BigDecimal.ZERO;
+            long topSold = -1L;
+            for (Map.Entry<String, long[]> e : seatCounts.entrySet()) {
+                BigDecimal rev = tierRevenue.getOrDefault(e.getKey(), BigDecimal.ZERO);
+                if (rev.compareTo(topRevenue) > 0 || (rev.compareTo(topRevenue) == 0 && e.getValue()[1] > topSold)) {
+                    topTier = e.getKey();
+                    topRevenue = rev;
+                    topSold = e.getValue()[1];
+                }
+            }
+
+            // Premium unsold for this show: tiers priced strictly above the show's cheapest tier.
+            BigDecimal premiumUnsoldValue = BigDecimal.ZERO;
+            BigDecimal minPrice = effectivePrice.values().stream().min(BigDecimal::compareTo).orElse(null);
+            if (minPrice != null) {
+                for (Map.Entry<String, long[]> e : seatCounts.entrySet()) {
+                    BigDecimal price = effectivePrice.get(e.getKey());
+                    if (price != null && price.compareTo(minPrice) > 0) {
+                        long unsold = e.getValue()[0] - e.getValue()[1];
+                        if (unsold > 0) {
+                            premiumUnsoldValue = premiumUnsoldValue.add(
+                                    price.multiply(BigDecimal.valueOf(unsold)));
+                        }
+                    }
+                }
+            }
+
+            long showTotal = seatCounts.values().stream().mapToLong(c -> c[0]).sum();
+            showMix.add(new ShowTierMixRow(
+                    show.getId(),
+                    show.getStartTime(),
+                    show.getMovie() != null ? show.getMovie().getTitle() : "",
+                    show.getScreen().getName(),
+                    show.getScreen().getTheatre().getName(),
+                    showSold,
+                    showTotal,
+                    pct(showSold, showTotal),
+                    showRevenue,
+                    topTier,
+                    premiumUnsoldValue,
+                    premiumUnsoldValue.compareTo(BigDecimal.ZERO) > 0
+            ));
+        }
+
+        // Scope-level derived metrics.
+        BigDecimal minRealised = byTier.values().stream()
+                .filter(a -> a.seatsSold > 0)
+                .map(a -> a.revenue.divide(BigDecimal.valueOf(a.seatsSold), 2, RoundingMode.HALF_UP))
+                .min(BigDecimal::compareTo).orElse(null);
+
+        BigDecimal minConfigured = byTier.values().stream()
+                .filter(a -> a.configuredCount > 0)
+                .map(a -> a.configuredSum.divide(BigDecimal.valueOf(a.configuredCount), 2, RoundingMode.HALF_UP))
+                .min(BigDecimal::compareTo).orElse(null);
+
+        BigDecimal premiumRevenue = BigDecimal.ZERO;
+        if (minConfigured != null) {
+            for (TierAccumulator acc : byTier.values()) {
+                BigDecimal cfg = acc.configuredCount > 0
+                        ? acc.configuredSum.divide(BigDecimal.valueOf(acc.configuredCount), 2, RoundingMode.HALF_UP)
+                        : (acc.seatsSold > 0
+                            ? acc.revenue.divide(BigDecimal.valueOf(acc.seatsSold), 2, RoundingMode.HALF_UP)
+                            : null);
+                if (cfg != null && cfg.compareTo(minConfigured) > 0) {
+                    premiumRevenue = premiumRevenue.add(acc.revenue);
+                }
+            }
+        }
+
+        List<TierValueRow> rows = new ArrayList<>();
+        for (Map.Entry<String, TierAccumulator> e : byTier.entrySet()) {
+            TierAccumulator acc = e.getValue();
+            BigDecimal avgRealised = acc.seatsSold > 0
+                    ? acc.revenue.divide(BigDecimal.valueOf(acc.seatsSold), 2, RoundingMode.HALF_UP)
+                    : BigDecimal.ZERO;
+            BigDecimal configured = acc.configuredCount > 0
+                    ? acc.configuredSum.divide(BigDecimal.valueOf(acc.configuredCount), 2, RoundingMode.HALF_UP)
+                    : avgRealised;
+            BigDecimal uplift = (minRealised != null && minRealised.compareTo(BigDecimal.ZERO) > 0
+                    && acc.seatsSold > 0)
+                    ? avgRealised.divide(minRealised, 2, RoundingMode.HALF_UP)
+                    : BigDecimal.ZERO;
+
+            rows.add(new TierValueRow(
+                    e.getKey(),
+                    acc.seatsTotal,
+                    acc.seatsSold,
+                    pct(acc.seatsSold, acc.seatsTotal),
+                    acc.revenue,
+                    pct(acc.seatsSold, totalTickets),
+                    share(acc.revenue, totalRevenue),
+                    avgRealised,
+                    configured,
+                    uplift
+            ));
+        }
+        rows.sort(Comparator.comparing(TierValueRow::revenue)
+                .thenComparing(TierValueRow::seatsSold).reversed());
+
+        BigDecimal avgRealisedOverall = totalTickets > 0
+                ? totalRevenue.divide(BigDecimal.valueOf(totalTickets), 2, RoundingMode.HALF_UP)
+                : BigDecimal.ZERO;
+        BigDecimal avgBase = basePriceCount > 0
+                ? basePriceSum.divide(BigDecimal.valueOf(basePriceCount), 2, RoundingMode.HALF_UP)
+                : BigDecimal.ZERO;
+        BigDecimal upliftAbs = avgRealisedOverall.subtract(avgBase);
+        BigDecimal upliftPct = avgBase.compareTo(BigDecimal.ZERO) > 0
+                ? upliftAbs.multiply(BigDecimal.valueOf(100)).divide(avgBase, 2, RoundingMode.HALF_UP)
+                : BigDecimal.ZERO;
+        BigDecimal premiumMix = totalRevenue.compareTo(BigDecimal.ZERO) > 0
+                ? premiumRevenue.multiply(BigDecimal.valueOf(100)).divide(totalRevenue, 2, RoundingMode.HALF_UP)
+                : BigDecimal.ZERO;
+
+        String currentUser = SecurityContextHolder.getContext().getAuthentication().getName();
+
+        return new TierValueResponse(
+                resolveTierScopeName(scopeTheatreId, scopeCityId),
+                from.format(DateTimeFormatter.ISO_LOCAL_DATE),
+                to.format(DateTimeFormatter.ISO_LOCAL_DATE),
+                shows.size(),
+                new TierValueKpis(totalRevenue, totalTickets, avgRealisedOverall, avgBase,
+                        upliftAbs, upliftPct, premiumMix, unsoldInventoryValue),
+                rows,
+                showMix,
+                LocalDateTime.now().format(DISPLAY_FMT),
+                currentUser
+        );
+    }
+
+    private static String normalizeTierName(String name) {
+        return (name == null || name.isBlank()) ? "GENERAL" : name.trim();
+    }
+
+    private static BigDecimal pct(long part, long whole) {
+        if (whole <= 0) {
+            return BigDecimal.ZERO;
+        }
+        return BigDecimal.valueOf(part).multiply(BigDecimal.valueOf(100))
+                .divide(BigDecimal.valueOf(whole), 2, RoundingMode.HALF_UP);
+    }
+
+    private static BigDecimal share(BigDecimal part, BigDecimal whole) {
+        if (whole == null || whole.compareTo(BigDecimal.ZERO) == 0
+                || part == null || part.compareTo(BigDecimal.ZERO) == 0) {
+            return BigDecimal.ZERO;
+        }
+        return part.multiply(BigDecimal.valueOf(100))
+                .divide(whole, 2, RoundingMode.HALF_UP);
+    }
+
+    private String resolveTierScopeName(Long theatreId, Long cityId) {
+        if (theatreId != null) {
+            return theatreRepository.findByIdAndIsDeletedFalse(theatreId)
+                    .map(Theatre::getName)
+                    .orElse("Theatre #" + theatreId);
+        }
+        if (cityId != null) {
+            return cityRepository.findById(cityId)
+                    .map(c -> "All theatres in " + c.getName())
+                    .orElse("City #" + cityId);
+        }
+        return "All Theatres";
+    }
+
+    private static final class TierAccumulator {
+        long seatsTotal;
+        long seatsSold;
+        BigDecimal revenue = BigDecimal.ZERO;
+        BigDecimal configuredSum = BigDecimal.ZERO;
+        int configuredCount;
     }
 
     // ================= DROPDOWNS =================

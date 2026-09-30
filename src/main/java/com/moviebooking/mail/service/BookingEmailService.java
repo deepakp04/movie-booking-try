@@ -156,11 +156,26 @@ public class BookingEmailService {
             ));
         }
 
-        // Payment info
-        String paymentStatus = tx != null ? capitalize(tx.getStatus().name()) : "N/A";
-        String paymentMethod = "Online Payment";
+        // Payment info — voucher bookings carry no gateway transaction.
+        boolean voucherBooking = booking.isVoucherBooking();
+        String voucherCode = booking.getVoucherCode() != null ? booking.getVoucherCode() : "";
+        String paymentStatus = voucherBooking
+                ? "Covered by Voucher"
+                : (tx != null ? capitalize(tx.getStatus().name()) : "N/A");
+        String paymentMethod = voucherBooking
+                ? "Ticket Voucher " + escapeHtml(voucherCode) + " — " + booking.getNumberOfSeats() + " free ticket(s)"
+                : "Online Payment";
         String transactionId = booking.getTransactionId();
-        String paymentId = tx != null && tx.getRazorpayPaymentId() != null ? tx.getRazorpayPaymentId() : "N/A";
+        String paymentId = voucherBooking
+                ? "Not applicable (voucher)"
+                : (tx != null && tx.getRazorpayPaymentId() != null ? tx.getRazorpayPaymentId() : "N/A");
+        String totalPaidLabel = voucherBooking
+                ? "₹0 — paid with voucher (" + escapeHtml(voucherCode) + ")"
+                : "₹" + booking.getTotalAmount();
+        String voucherBanner = voucherBooking
+                ? "<div style=\"margin-top:10px;display:inline-block;background:rgba(229,184,11,0.12);border:1px solid #e5b80b;border-radius:20px;padding:8px 24px;\">"
+                    + "<span style=\"color:#fbe38a;font-size:14px;font-weight:600;\">🎟️ BOOKED WITH VOUCHER</span></div>"
+                : "";
 
         // Customer info
         String customerName = escapeHtml(user.getName());
@@ -170,8 +185,8 @@ public class BookingEmailService {
         String ticketPlural = booking.getNumberOfSeats() > 1 ? "s" : "";
 
         return String.format(confirmationTemplate(),
-                // Header: bookingId, bookedOn
-                bookingId, bookedOn,
+                // Header: bookingId, bookedOn, voucherBanner
+                bookingId, bookedOn, voucherBanner,
                 // Movie: title, info, ratingBadge, showDate, showTime
                 escapeHtml(movieTitle), movieInfo, ratingBadge, showDate, showTime,
                 // Theatre: name, screen, address, city
@@ -181,7 +196,7 @@ public class BookingEmailService {
                 // Ticket count + plural
                 booking.getNumberOfSeats(), ticketPlural,
                 // Payment: total, status, method, transactionId, paymentId
-                booking.getTotalAmount(), paymentStatus, paymentMethod, transactionId, paymentId,
+                totalPaidLabel, paymentStatus, paymentMethod, transactionId, paymentId,
                 // Digital ticket: bookingId, movie, date, time, theatre, screen
                 bookingId, escapeHtml(movieTitle), showDate, showTime, escapeHtml(theatreName), escapeHtml(screenName),
                 // Customer: name, email, phone
@@ -230,15 +245,18 @@ public class BookingEmailService {
             ));
         }
 
-        // Payment info
+        // Payment info — voucher bookings were settled with free tickets.
         String transactionId = booking.getTransactionId();
+        String amountPaidLabel = booking.isVoucherBooking()
+                ? "₹0 (voucher " + escapeHtml(booking.getVoucherCode()) + ")"
+                : "₹" + booking.getTotalAmount();
 
         return String.format(cancellationTemplate(),
                 bookingId, cancelledOn,
                 escapeHtml(movieTitle), movieInfo, showDate, showTime,
                 escapeHtml(theatreName), escapeHtml(screenName), escapeHtml(theatreAddress), escapeHtml(cityName),
                 seatRows.toString(),
-                booking.getTotalAmount(),
+                amountPaidLabel,
                 transactionId,
                 escapeHtml(user.getName())
         );
@@ -284,6 +302,7 @@ public class BookingEmailService {
             </div>
             <p style="margin:12px 0 0;color:#a1a1aa;font-size:13px;">Booking ID: <strong style="color:#e5b80b;">%s</strong></p>
             <p style="margin:4px 0 0;color:#71717a;font-size:12px;">Booked on: %s</p>
+            %s
         </td></tr>
 
         <!-- Movie Info -->
@@ -322,7 +341,7 @@ public class BookingEmailService {
             <div style="background:#0b0c0e;border-radius:6px;padding:16px;">
                 <table width="100%%" cellpadding="0" cellspacing="0">
                 <tr><td style="padding:4px 0;color:#a1a1aa;font-size:13px;">Total Paid</td>
-                    <td style="padding:4px 0;color:#e5b80b;font-size:16px;font-weight:700;text-align:right;">₹%s</td></tr>
+                    <td style="padding:4px 0;color:#e5b80b;font-size:16px;font-weight:700;text-align:right;">%s</td></tr>
                 <tr><td style="padding:4px 0;color:#a1a1aa;font-size:13px;">Payment Status</td>
                     <td style="padding:4px 0;color:#b9f6ca;font-size:13px;text-align:right;">%s</td></tr>
                 <tr><td style="padding:4px 0;color:#a1a1aa;font-size:13px;">Payment Method</td>
@@ -451,7 +470,7 @@ public class BookingEmailService {
             <div style="background:#0b0c0e;border-radius:6px;padding:16px;">
                 <table width="100%%" cellpadding="0" cellspacing="0">
                 <tr><td style="padding:4px 0;color:#a1a1aa;font-size:13px;">Amount Paid</td>
-                    <td style="padding:4px 0;color:#e4e4e7;font-size:14px;text-align:right;">₹%s</td></tr>
+                    <td style="padding:4px 0;color:#e4e4e7;font-size:14px;text-align:right;">%s</td></tr>
                 <tr><td style="padding:4px 0;color:#a1a1aa;font-size:13px;">Refund Amount</td>
                     <td style="padding:4px 0;color:#a1a1aa;font-size:14px;text-align:right;">₹0</td></tr>
                 <tr><td style="padding:4px 0;color:#a1a1aa;font-size:13px;">Refund Status</td>

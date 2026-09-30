@@ -61,21 +61,21 @@ public class EmailOutboxProcessor {
                 email.setStatus(EmailOutbox.EmailStatus.SENT);
                 email.setSentAt(LocalDateTime.now());
                 outboxRepository.save(email);
-                log.info("Email sent: {} to {} (booking {})",
-                        email.getEmailType(), email.getRecipientEmail(), email.getBookingId());
+                log.info("Email sent: {} to {} ({})",
+                        email.getEmailType(), email.getRecipientEmail(), reference(email));
             } catch (Exception e) {
                 email.setRetryCount(email.getRetryCount() + 1);
                 email.setFailureReason(truncate(e.getMessage(), 900));
 
                 if (email.getRetryCount() >= email.getMaxRetries()) {
                     email.setStatus(EmailOutbox.EmailStatus.FAILED);
-                    log.error("Email permanently failed after {} retries: booking {} type {} to {} — {}",
-                            email.getMaxRetries(), email.getBookingId(), email.getEmailType(),
+                    log.error("Email permanently failed after {} retries: {} type {} to {} — {}",
+                            email.getMaxRetries(), reference(email), email.getEmailType(),
                             email.getRecipientEmail(), e.getMessage());
                 } else {
-                    log.warn("Email send failed (attempt {}/{}): booking {} — {}",
+                    log.warn("Email send failed (attempt {}/{}): {} — {}",
                             email.getRetryCount(), email.getMaxRetries(),
-                            email.getBookingId(), e.getMessage());
+                            reference(email), e.getMessage());
                 }
                 outboxRepository.save(email);
             }
@@ -92,6 +92,13 @@ public class EmailOutboxProcessor {
         helper.setFrom("PVR Cinemas <cinemabooking45@gmail.com>");
 
         mailSender.send(message);
+    }
+
+    /** Human-readable subject of the outbox row for logs (booking or voucher). */
+    private String reference(EmailOutbox email) {
+        if (email.getBookingId() != null) return "booking " + email.getBookingId();
+        if (email.getVoucherId() != null) return "voucher " + email.getVoucherId();
+        return "outbox #" + email.getId();
     }
 
     private String truncate(String text, int maxLen) {

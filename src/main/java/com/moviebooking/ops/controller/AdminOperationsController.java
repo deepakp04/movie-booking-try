@@ -191,6 +191,8 @@ public class AdminOperationsController {
             case "THEATRE_REPORT" -> snapshot = reportService.generateTheatreReport(req.theatreId(), req.dateFrom(), req.dateTo(), null);
             case "TICKET_HOLDER_REPORT" -> snapshot = reportService.generateTicketHolderReport(req.showId(), null);
             case "INCIDENT_REPORT" -> snapshot = reportService.generateIncidentReport(req.incidentId(), null);
+            case "TIER_VALUE_REPORT" -> snapshot = reportService.generateTierValueReport(
+                    req.theatreId(), req.dateFrom(), req.dateTo(), null);
             default -> throw new com.moviebooking.common.exception.BusinessException("Unknown report type: " + req.reportType());
         }
 
@@ -345,6 +347,23 @@ public class AdminOperationsController {
                 "Viewed customer profile #" + customerId + " (" + profile.name() + ")", request);
 
         return ApiResponse.success("Customer profile retrieved", profile);
+    }
+
+    // ================= TIER VALUE REPORT =================
+
+    @GetMapping("/tier-value")
+    public ApiResponse<TierValueResponse> getTierValueReport(
+            @RequestParam(required = false) String dateFrom,
+            @RequestParam(required = false) String dateTo,
+            @RequestParam(required = false) Long cityId,
+            @RequestParam(required = false) Long theatreId,
+            @RequestParam(required = false) Long screenId,
+            @RequestParam(required = false) String movieTitle,
+            HttpServletRequest request) {
+
+        TierValueResponse response = operationsService.getTierValueReport(
+                dateFrom, dateTo, cityId, theatreId, screenId, movieTitle, null);
+        return ApiResponse.success("Tier value report loaded", response);
     }
 
     // ================= SCREEN UTILISATION =================

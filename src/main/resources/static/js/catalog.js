@@ -26,12 +26,20 @@ let userProfile = null;      // Cached profile for "for self" auto-fill
 let currentCbfcRating = null; // CBFC rating of the movie being booked
 let bookingType = 'self';    // 'self' | 'others'
 
+// Voucher state
+let myVoucher = null;          // /api/voucher/my summary for the signed-in user
+let appliedVoucherCode = null; // code applied to the booking in progress
+let appliedVoucherRemaining = 0;
+
 // Initialize
 document.addEventListener('DOMContentLoaded', () => {
     loadCities();
     checkAuthState();
     resumeHoldSession(); // Resume any active hold session on page load
-    if (isAuthenticated()) fetchUserProfile();
+    if (isAuthenticated()) {
+        fetchUserProfile();
+        initVoucherSurfaces();
+    }
 });
 
 // Auth Check (matching auth.js token key "accessToken")
@@ -599,8 +607,11 @@ async function initiateBooking(showId, theatreName, time, screenName) {
     activeShowContext = { showId, theatreName, time, screenName };
     selectedSeats = [];
     activeBookingId = null;
+    resetVoucherApplication();
     clearHoldCountdown();
     updateCheckoutBar();
+    // Refresh the voucher balance whenever the seat page opens, then show the box.
+    refreshVoucherSummary();
 
     document.getElementById('bookingMovieTitle').innerText = document.getElementById('detailTitle').innerText;
     document.getElementById('bookingTheatreName').innerText = `${theatreName} - ${screenName}`;
@@ -740,6 +751,13 @@ function toggleSeatSelection(seatDiv, seatId) {
         seatDiv.classList.add('available');
         selectedSeats = selectedSeats.filter(id => id !== seatId);
     } else {
+        // A voucher booking can never exceed the remaining free tickets — block the
+        // extra seat and explain why in the exception dialog.
+        if (appliedVoucherCode && appliedVoucherRemaining > 0
+                && selectedSeats.length + 1 > appliedVoucherRemaining) {
+            showVoucherError(`Your voucher has only ${appliedVoucherRemaining} free ticket(s) left, but you're selecting more than that. Reduce your selection to ${appliedVoucherRemaining} ticket(s) or fewer to use the voucher.`);
+            return;
+        }
         // Capped at the quantity chosen up front, not just the global maximum.
         const cap = requiredSeatCount > 0 ? requiredSeatCount : MAX_SEATS;
         if (selectedSeats.length >= cap) {
@@ -863,6 +881,7 @@ function goBackToMovieDetail() {
     requiredSeatCount = 0;
     disconnectFromSeatStream(); // Disconnect SSE when leaving seat selection
     clearHoldSession(); // Clear the hold session when leaving seat selection
+    resetVoucherApplication(); // A code applied here belongs to this booking only
     updateCheckoutBar();
 }
 
@@ -951,6 +970,238 @@ function viewMyBookings() {
 }
 
 // =========================================
+// TICKET VOUCHER (marquee + seat-page box)
+// =========================================
+
+async function voucherApiCall(endpoint, method = 'GET', body = null) {
+    return authenticatedApiCall('/api/voucher', endpoint, method, body);
+}
+
+/** Loads the signed-in user's voucher summary and paints the marquee + apply box. */
+async function initVoucherSurfaces() {
+    if (!isAuthenticated()) return;
+    try {
+        const res = await voucherApiCall('/my', 'GET');
+        myVoucher = res.data || null;
+    } catch (err) {
+        console.error('[VOUCHER] Failed to load voucher summary:', err);
+        return;
+    }
+    renderVoucherMarquee();
+    renderVoucherApplyCard();
+}
+
+/** Re-fetches the balance (after a booking, or when the seat page opens). */
+async function refreshVoucherSummary() {
+    if (!isAuthenticated()) return;
+    try {
+        const res = await voucherApiCall('/my', 'GET');
+        myVoucher = res.data || null;
+    } catch (err) {
+        console.error('[VOUCHER] Failed to refresh voucher summary:', err);
+        return;
+    }
+    renderVoucherMarquee();
+    renderVoucherApplyCard();
+}
+
+function renderVoucherMarquee() {
+    const marquee = document.getElementById('voucherMarquee');
+    const track = document.getElementById('voucherMarqueeTrack');
+    if (!marquee || !track) return;
+
+    if (!myVoucher || !myVoucher.active || !myVoucher.remainingFreeTickets) {
+        marquee.classList.add('hidden');
+        return;
+    }
+
+    const remaining = myVoucher.remainingFreeTickets;
+    const total = myVoucher.totalFreeTickets || 4;
+    track.textContent = `🎟️ You have ${remaining} of ${total} free tickets left on voucher ${myVoucher.code}`
+        + ` — click here to see how to use them before ${formatVoucherValidUntil(myVoucher.expiresAt)}!`;
+    marquee.classList.remove('hidden');
+}
+
+function renderVoucherApplyCard() {
+    const card = document.getElementById('voucherApplyCard');
+    const balance = document.getElementById('voucherApplyBalance');
+    const input = document.getElementById('voucherCodeInput');
+    if (!card) return;
+
+    if (!myVoucher || !myVoucher.active || !myVoucher.remainingFreeTickets) {
+        card.classList.add('hidden');
+        return;
+    }
+
+    if (balance) {
+        balance.textContent = `${myVoucher.remainingFreeTickets} of ${myVoucher.totalFreeTickets} free tickets available`;
+    }
+    // Pre-fill the account-bound code so the customer only has to click Apply.
+    if (input && !appliedVoucherCode && !input.value) {
+        input.value = myVoucher.code || '';
+    }
+    card.classList.remove('hidden');
+}
+
+function formatVoucherDate(iso) {
+    if (!iso) return '—';
+    return new Date(iso).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' });
+}
+
+/** The instant the voucher turns invalid minus a second = the last usable moment. */
+function formatVoucherValidUntil(iso) {
+    if (!iso) return '—';
+    return new Date(new Date(iso).getTime() - 1000).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' });
+}
+
+function openVoucherInfo() {
+    const modal = document.getElementById('voucherInfoModal');
+    if (!modal) return;
+
+    if (!myVoucher) {
+        showAlert('Your voucher information is still loading. Please try again in a moment.', 'error');
+        return;
+    }
+
+    const code = document.getElementById('voucherInfoCode');
+    const balance = document.getElementById('voucherInfoBalance');
+    const expiry = document.getElementById('voucherInfoExpiry');
+    const validity = document.getElementById('voucherInfoValidityText');
+    const remaining = myVoucher.remainingFreeTickets || 0;
+    const total = myVoucher.totalFreeTickets || 4;
+
+    if (code) code.textContent = myVoucher.code || '—';
+    if (balance) balance.textContent = `${remaining} of ${total} free tickets remaining`;
+    if (expiry) expiry.textContent = `Valid until ${formatVoucherValidUntil(myVoucher.expiresAt)} (turns invalid at ${formatVoucherDate(myVoucher.expiresAt)})`;
+    if (validity && myVoucher.expiresAt) {
+        validity.textContent = `Your voucher stays usable right up to the 30th day at 11:59 PM — `
+            + `that is ${formatVoucherValidUntil(myVoucher.expiresAt)}. From ${formatVoucherDate(myVoucher.expiresAt)} it becomes invalid and any unused free tickets lapse.`;
+    }
+    modal.classList.remove('hidden');
+}
+
+function closeVoucherInfo() {
+    document.getElementById('voucherInfoModal').classList.add('hidden');
+}
+
+function showVoucherError(message) {
+    const modal = document.getElementById('voucherErrorModal');
+    const text = document.getElementById('voucherErrorMessage');
+    if (text) text.textContent = message;
+    if (modal) modal.classList.remove('hidden');
+}
+
+function closeVoucherError() {
+    document.getElementById('voucherErrorModal').classList.add('hidden');
+}
+
+function showVoucherSuccess(message) {
+    const modal = document.getElementById('voucherSuccessModal');
+    const text = document.getElementById('voucherSuccessMessage');
+    if (text) text.textContent = message;
+    if (modal) modal.classList.remove('hidden');
+}
+
+function closeVoucherSuccess() {
+    document.getElementById('voucherSuccessModal').classList.add('hidden');
+}
+
+function setVoucherStatus(message, kind) {
+    const status = document.getElementById('voucherApplyStatus');
+    if (!status) return;
+    status.className = `voucher-apply-status${kind ? ' ' + kind : ''}`;
+    status.textContent = message;
+}
+
+/** Validates the typed code against the current selection, then locks it in. */
+async function applyVoucherCode() {
+    const input = document.getElementById('voucherCodeInput');
+    const btn = document.getElementById('voucherApplyBtn');
+    const card = document.getElementById('voucherApplyCard');
+    const code = (input?.value || '').trim();
+
+    if (!code) {
+        setVoucherStatus('Enter your voucher code first.', 'err');
+        return;
+    }
+    if (selectedSeats.length === 0) {
+        setVoucherStatus('Select your seats first, then apply the voucher code.', 'err');
+        return;
+    }
+
+    const token = localStorage.getItem('accessToken');
+    if (btn) { btn.disabled = true; btn.textContent = 'Checking…'; }
+
+    try {
+        const response = await fetch('/api/voucher/validate', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({ code, seats: selectedSeats.length })
+        });
+
+        if (response.status === 401 || response.status === 403) {
+            showAlert('Session expired. Please sign in again.', 'error');
+            setTimeout(() => window.location.href = '/auth.html', 1500);
+            return;
+        }
+
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok || result.success === false) {
+            appliedVoucherCode = null;
+            appliedVoucherRemaining = 0;
+            setVoucherStatus('', null);
+            showVoucherError(result.message || 'The voucher could not be applied to this booking.');
+            return;
+        }
+
+        const data = result.data || {};
+        appliedVoucherCode = data.code;
+        appliedVoucherRemaining = data.remainingFreeTickets || 0;
+
+        if (input) { input.value = appliedVoucherCode; input.disabled = true; }
+        if (btn) { btn.textContent = 'Applied ✓'; btn.disabled = true; }
+        if (card) card.classList.add('applied');
+        const status = document.getElementById('voucherApplyStatus');
+        if (status) {
+            status.className = 'voucher-apply-status ok';
+            status.innerHTML = `${result.message || 'Voucher applied.'} `
+                + `<a href="#" onclick="clearVoucherCode();return false;" style="color:var(--primary-gold);">Remove voucher</a>`;
+        }
+    } catch (err) {
+        console.error('[VOUCHER] Apply failed:', err);
+        showVoucherError('Could not reach the server to validate the voucher. Please try again.');
+    } finally {
+        if (btn && !appliedVoucherCode) { btn.disabled = false; btn.textContent = 'Apply'; }
+    }
+}
+
+function clearVoucherCode() {
+    resetVoucherApplication();
+    setVoucherStatus('Voucher removed — this booking will be paid normally.', null);
+}
+
+/** Clears the applied code without touching the (fresh) voucher summary. */
+function resetVoucherApplication() {
+    appliedVoucherCode = null;
+    appliedVoucherRemaining = 0;
+
+    const input = document.getElementById('voucherCodeInput');
+    const btn = document.getElementById('voucherApplyBtn');
+    const card = document.getElementById('voucherApplyCard');
+    const status = document.getElementById('voucherApplyStatus');
+
+    if (input) { input.disabled = false; input.value = ''; }
+    if (btn) { btn.disabled = false; btn.textContent = 'Apply'; }
+    if (card) card.classList.remove('applied');
+    if (status) { status.className = 'voucher-apply-status'; status.textContent = ''; }
+
+    renderVoucherApplyCard();
+}
+
+// =========================================
 // ATTENDEE MODAL LOGIC
 // =========================================
 
@@ -991,6 +1242,12 @@ function openAttendeeModal() {
         banner.classList.remove('hidden');
     } else {
         banner.classList.add('hidden');
+    }
+
+    // The primary action changes when a voucher is applied — no gateway follows.
+    const continueBtn = document.getElementById('attendeeContinueBtn');
+    if (continueBtn) {
+        continueBtn.textContent = appliedVoucherCode ? 'Confirm Voucher Booking' : 'Continue to Pay';
     }
 
     renderAttendeeForms();
@@ -1185,29 +1442,66 @@ async function submitAttendees() {
     // Close attendee modal
     closeAttendeeModal();
 
+    const usingVoucher = !!appliedVoucherCode;
+
+    // Final voucher guard: the selection must fit in the remaining free tickets.
+    if (usingVoucher && selectedSeats.length > appliedVoucherRemaining) {
+        showVoucherError(`Your voucher has only ${appliedVoucherRemaining} free ticket(s) left, but you selected ${selectedSeats.length}. Reduce your selection to ${appliedVoucherRemaining} ticket(s) or fewer before confirming.`);
+        return;
+    }
+
     // Show confirmation
-    const confirmed = confirm(
-        `You're about to hold ${selectedSeats.length} seat(s).\n\n` +
-        `Tickets are 100% NON-REFUNDABLE once payment is completed.\n\nContinue to payment?`
-    );
+    const confirmed = usingVoucher
+        ? confirm(
+            `You're about to book ${selectedSeats.length} seat(s) with voucher ${appliedVoucherCode}.\n\n` +
+            `${selectedSeats.length} free ticket(s) will be deducted and no payment gateway will open.\n\nConfirm booking?`
+        )
+        : confirm(
+            `You're about to hold ${selectedSeats.length} seat(s).\n\n` +
+            `Tickets are 100% NON-REFUNDABLE once payment is completed.\n\nContinue to payment?`
+        );
     if (!confirmed) return;
 
-    // Proceed with the existing payment flow
     const payBtn = document.getElementById('payNowBtn');
     if (payBtn) {
         payBtn.disabled = true;
-        payBtn.textContent = 'Opening payment...';
+        payBtn.textContent = usingVoucher ? 'Confirming booking...' : 'Opening payment...';
     }
 
     try {
-        // Step 1: Hold the seats with attendee info
-        const holdRes = await bookingApiCall('/hold', 'POST', {
+        // Step 1: Hold the seats with attendee info — or confirm instantly with the voucher
+        const holdBody = {
             showId: activeShowContext.showId,
             seatCodes: selectedSeats,
             attendees: window._pendingAttendees
-        });
+        };
+        if (usingVoucher) holdBody.voucherCode = appliedVoucherCode;
+        const holdRes = await bookingApiCall('/hold', 'POST', holdBody);
 
         const booking = holdRes.data;
+
+        // Voucher path: the booking is already CONFIRMED — skip Razorpay entirely.
+        if (usingVoucher || booking.paymentMode === 'VOUCHER') {
+            const usedTickets = booking.voucherTicketsUsed || selectedSeats.length;
+            clearHoldSession();
+            disconnectFromSeatStream();
+            selectedSeats = [];
+            requiredSeatCount = 0;
+            updateCheckoutBar();
+            await refreshVoucherSummary();
+            const remaining = myVoucher && myVoucher.remainingFreeTickets != null
+                ? myVoucher.remainingFreeTickets
+                : Math.max(0, appliedVoucherRemaining - usedTickets);
+            resetVoucherApplication();
+            showVoucherSuccess(
+                `Your booking for ${booking.movieTitle} (${booking.seatCodes.join(', ')}) is confirmed. `
+                + `${usedTickets} free ticket(s) were used — ${remaining} free ticket(s) remain on your voucher. `
+                + `A confirmation email and your updated voucher balance have been sent to your inbox.`
+            );
+            await fetchAndRenderSeats(activeShowContext.showId);
+            return;
+        }
+
         activeBookingId = booking.bookingId;
         holdExpiresAt = new Date(booking.holdExpiresAt).getTime();
         myHeldSeats = new Set(booking.seatCodes);

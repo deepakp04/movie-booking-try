@@ -104,6 +104,44 @@ public class ReportService {
         return toResponse(saved);
     }
 
+    /**
+     * Snapshot of the Pricing Tier Value report: business value of each seat
+     * tier across a date range (optionally narrowed to one theatre).
+     */
+    public ReportSnapshotResponse generateTierValueReport(Long theatreId, String dateFrom, String dateTo,
+                                                          Long restrictToTheatreId) {
+        TierValueResponse data = operationsService.getTierValueReport(
+                dateFrom, dateTo, null, theatreId, null, null, restrictToTheatreId);
+        User currentUser = getCurrentUser();
+
+        String snapshotJson;
+        try {
+            snapshotJson = objectMapper.writeValueAsString(data);
+        } catch (Exception e) {
+            throw new BusinessException("Failed to serialize report data");
+        }
+
+        String filters = "{\"dateFrom\":\"" + (dateFrom != null ? dateFrom : "")
+                + "\",\"dateTo\":\"" + (dateTo != null ? dateTo : "")
+                + "\",\"theatreId\":\"" + (theatreId != null ? theatreId : "") + "\"}";
+
+        ReportSnapshot snapshot = new ReportSnapshot();
+        snapshot.setReportType(ReportType.TIER_VALUE_REPORT);
+        snapshot.setGeneratedBy(currentUser);
+        snapshot.setGeneratedAt(LocalDateTime.now());
+        snapshot.setReportScope(theatreId != null ? ReportScope.THEATRE : ReportScope.ALL);
+        snapshot.setScopeId(theatreId);
+        snapshot.setScopeName(data.scopeName());
+        snapshot.setFiltersJson(filters);
+        snapshot.setSnapshotData(snapshotJson);
+
+        ReportSnapshot saved = reportRepository.save(snapshot);
+        log.info("Tier value report generated for scope {} by user {}",
+                data.scopeName(), currentUser.getEmail());
+
+        return toResponse(saved);
+    }
+
     public ReportSnapshotResponse generateTicketHolderReport(Long showId, Long restrictToTheatreId) {
         List<TicketHolderResponse> holders = operationsService.getTicketHolders(showId, restrictToTheatreId);
         User currentUser = getCurrentUser();

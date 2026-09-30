@@ -31,6 +31,7 @@
             <button class="nav-tab" onclick="switchTab('maintenanceTab')">🛠️ Maintenance</button>
             <button class="nav-tab" onclick="switchTab('analyticsTab')">📊 Analytics</button>
             <button class="nav-tab" onclick="switchTab('operationsTab')">📋 Operations</button>
+            <button class="nav-tab" onclick="switchTab('vouchersTab')">🎟️ Vouchers <span id="voucherEligibleBadge" class="nav-badge hidden">0</span></button>
         </aside>
 
         <!-- Main Content Area -->
@@ -871,6 +872,7 @@
                         <button class="btn btn-secondary btn-sm" onclick="opsShowSection('opsShowReport')">🎬 Show Report</button>
                         <button class="btn btn-secondary btn-sm" onclick="opsShowSection('opsTheatreReport')">🏛️ Theatre Report</button>
                         <button class="btn btn-secondary btn-sm" onclick="opsShowSection('opsTicketHolders')">🎟️ Ticket Holders</button>
+                        <button class="btn btn-secondary btn-sm" onclick="opsShowSection('opsTierValueReport')">💎 Tier Value</button>
                         <button class="btn btn-secondary btn-sm" onclick="opsShowSection('opsReports')">📄 Generated Reports</button>
                     </div>
 
@@ -1019,6 +1021,38 @@
                             </div>
                         </div>
                         <div id="opsTicketHoldersResult" class="hidden"></div>
+                    </div>
+                </div>
+
+                <!-- TIER VALUE REPORT SECTION -->
+                <div id="opsTierValueReport" class="ops-section hidden">
+                    <div class="admin-card">
+                        <h3>💎 Pricing Tier Value Report</h3>
+                        <p class="subtitle">Business value of every pricing tier — occupancy, revenue mix, realised vs configured price, and premium inventory left unsold.</p>
+                        <div class="analytics-filters" style="margin-bottom: 12px;">
+                            <div class="filter-group">
+                                <label for="opsTvfCity">City</label>
+                                <select id="opsTvfCity" onchange="opsOnFilterChange('tierValue', 'city')">
+                                    <option value="">All Cities</option>
+                                </select>
+                            </div>
+                            <div class="filter-group">
+                                <label for="opsTvfTheatre">Theatre</label>
+                                <select id="opsTvfTheatre" onchange="opsOnFilterChange('tierValue', 'theatre')">
+                                    <option value="">All Theatres</option>
+                                </select>
+                            </div>
+                            <div class="filter-group">
+                                <label for="opsTvfDateFrom">Date From</label>
+                                <input type="date" id="opsTvfDateFrom">
+                            </div>
+                            <div class="filter-group">
+                                <label for="opsTvfDateTo">Date To</label>
+                                <input type="date" id="opsTvfDateTo">
+                            </div>
+                            <button class="btn btn-primary btn-sm" onclick="opsLoadTierValue()" style="align-self: flex-end;">Load Report</button>
+                        </div>
+                        <div id="opsTierValueResult" class="hidden"></div>
                     </div>
                 </div>
 
@@ -1194,6 +1228,110 @@
                     </div>
                 </div> <!-- close opsScreenUtilCard -->
 
+            </section>
+
+            <!-- ============ VOUCHERS TAB ============ -->
+            <section id="vouchersTab" class="tab-content hidden">
+                <div class="section-title">
+                    <h2>Ticket Vouchers</h2>
+                    <p class="subtitle">Customers whose lifetime spend crossed ₹10,000 are eligible for a voucher worth 4 free tickets, valid for 30 days. Approve and send them here, then track every free ticket.</p>
+                </div>
+
+                <!-- KPI ROW -->
+                <div class="kpi-grid" id="voucherKpiGrid" style="grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); margin-bottom: 18px;"></div>
+
+                <!-- ELIGIBLE CUSTOMERS -->
+                <div class="admin-card" style="margin-bottom: 18px;">
+                    <div style="display:flex; justify-content:space-between; align-items:flex-end; flex-wrap:wrap; gap:12px; margin-bottom:10px;">
+                        <div>
+                            <h3 style="margin:0;">Eligible Customers</h3>
+                            <p class="subtitle" style="margin:4px 0 0;">Select all or handpick, then approve to send the voucher by email.</p>
+                        </div>
+                        <div class="form-group" style="margin:0; flex:1; max-width:320px;">
+                            <label for="voucherEligibleSearch">Search eligible</label>
+                            <input type="text" id="voucherEligibleSearch" placeholder="Name, email or phone"
+                                   oninput="voucherRenderEligible()">
+                        </div>
+                    </div>
+                    <p class="subtitle" id="voucherEligibleCount" style="margin:0 0 10px 0;"></p>
+                    <div class="table-wrapper">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th style="width:36px;"><input type="checkbox" id="voucherSelectAll"
+                                            onchange="voucherToggleSelectAll(this.checked)" title="Select all eligible"></th>
+                                    <th>Customer</th>
+                                    <th>Email</th>
+                                    <th>Phone</th>
+                                    <th>Lifetime Paid Spend</th>
+                                    <th>Confirmed Bookings</th>
+                                    <th>Last Booking</th>
+                                    <th>Previous Voucher</th>
+                                </tr>
+                            </thead>
+                            <tbody id="voucherEligibleBody"></tbody>
+                        </table>
+                    </div>
+                    <div style="display:flex; justify-content:flex-end; align-items:center; gap:12px; margin-top:12px; flex-wrap:wrap;">
+                        <span class="subtitle" id="voucherSelectedCount" style="margin:0;"></span>
+                        <button class="btn btn-primary" id="voucherSendBtn" onclick="voucherSendSelected()">📨 Approve &amp; Send Vouchers</button>
+                    </div>
+                    <div id="voucherIssueResult" style="margin-top:12px;"></div>
+                </div>
+
+                <!-- ISSUED VOUCHERS -->
+                <div class="admin-card">
+                    <div style="display:flex; justify-content:space-between; align-items:flex-end; flex-wrap:wrap; gap:12px; margin-bottom:10px;">
+                        <h3 style="margin:0;">Issued Vouchers</h3>
+                        <div class="analytics-filters" style="margin:0;">
+                            <div class="filter-group">
+                                <label for="voucherStatusFilter">Status</label>
+                                <select id="voucherStatusFilter" onchange="voucherLoadList()">
+                                    <option value="">All Statuses</option>
+                                    <option value="ACTIVE">Active</option>
+                                    <option value="EXHAUSTED">Completed (all tickets used)</option>
+                                    <option value="EXPIRED">Expired</option>
+                                </select>
+                            </div>
+                            <div class="filter-group">
+                                <label for="voucherSearchBox">Search</label>
+                                <input type="text" id="voucherSearchBox" placeholder="Name, email, code or phone"
+                                       oninput="voucherLoadList()">
+                            </div>
+                            <div class="filter-group">
+                                <label for="voucherCompletedOnly">Finished Vouchers</label>
+                                <select id="voucherCompletedOnly" onchange="voucherLoadList()">
+                                    <option value="false">Show all</option>
+                                    <option value="true">Only users who used all 4 tickets</option>
+                                </select>
+                            </div>
+                            <button class="btn btn-secondary btn-sm" onclick="voucherLoadList()" style="align-self:flex-end;">Refresh</button>
+                        </div>
+                    </div>
+                    <p class="subtitle" id="voucherTableCount" style="margin:0 0 10px 0;"></p>
+                    <div class="table-wrapper">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Customer</th>
+                                    <th>Email</th>
+                                    <th>Voucher Code</th>
+                                    <th>Free Tickets</th>
+                                    <th>Remaining</th>
+                                    <th>Used</th>
+                                    <th>Value Redeemed</th>
+                                    <th>Voucher Bookings</th>
+                                    <th>Status</th>
+                                    <th>Issued</th>
+                                    <th>Valid Until</th>
+                                    <th>Last Used</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="voucherTableBody"></tbody>
+                        </table>
+                    </div>
+                </div>
             </section>
 
         </main>

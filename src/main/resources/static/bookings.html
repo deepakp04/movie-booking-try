@@ -283,9 +283,10 @@
         let allBookings = [];
         let currentFilter = 'all';
 
-        // Check authentication on page load
+        // Check authentication on page load. The auth flow stores the JWT under
+        // "accessToken"; older builds used "token", so accept either.
         document.addEventListener('DOMContentLoaded', function() {
-            const token = localStorage.getItem('token');
+            const token = localStorage.getItem('accessToken') || localStorage.getItem('token');
             if (!token) {
                 window.location.href = 'auth.html';
                 return;
@@ -295,7 +296,7 @@
 
         async function loadBookings() {
             try {
-                const token = localStorage.getItem('token');
+                const token = localStorage.getItem('accessToken') || localStorage.getItem('token');
                 const response = await fetch('/api/booking/my-bookings', {
                     method: 'GET',
                     headers: {
@@ -305,6 +306,7 @@
                 });
 
                 if (response.status === 401) {
+                    localStorage.removeItem('accessToken');
                     localStorage.removeItem('token');
                     localStorage.removeItem('refreshToken');
                     window.location.href = 'auth.html';
@@ -389,21 +391,26 @@
             const seats = booking.seatCodes || [];
             const seatsHtml = seats.slice(0, 5).map(s => `<span class="seat-tag">${s}</span>`).join('');
             const moreSeats = seats.length > 5 ? `<span class="seat-tag">+${seats.length - 5} more</span>` : '';
+            const isVoucherBooking = booking.paymentMode === 'VOUCHER';
 
             return `
-                <div class="booking-card ${statusClass}">
+                <div class="booking-card ${statusClass}" style="${isVoucherBooking ? 'border-left-color: #e5b80b;' : ''}">
                     <div class="booking-header">
                         <div>
                             <h3 class="movie-title">${booking.movieTitle}</h3>
                             <div style="color: #666; font-size: 13px;">${booking.theatreName} - ${booking.screenName}</div>
                         </div>
-                        <span class="status-badge ${statusClass}">${booking.status.replace('_', ' ')}</span>
+                        <div style="text-align: right;">
+                            <span class="status-badge ${statusClass}">${booking.status.replace('_', ' ')}</span>
+                            ${isVoucherBooking ? '<div style="margin-top: 6px;"><span style="display: inline-block; padding: 3px 10px; border-radius: 999px; font-size: 11px; font-weight: 700; background: #fdf6dd; color: #a97e05; border: 1px solid #e5b80b;">🎟️ Booked via Voucher</span></div>' : ''}
+                        </div>
                     </div>
                     
                     <div class="booking-details">
                         <div><strong>📅</strong> ${showTime}</div>
                         <div><strong>💺</strong> ${booking.numberOfSeats} seat(s)</div>
-                        <div><strong>💰</strong> ₹${booking.totalAmount}</div>
+                        <div><strong>💰</strong> ${isVoucherBooking ? '₹0 — paid by voucher' : '₹' + booking.totalAmount}</div>
+                        ${isVoucherBooking ? `<div><strong>🎟️</strong> Voucher ${booking.voucherCode || '—'} · ${booking.voucherTicketsUsed || booking.numberOfSeats} free ticket(s) used</div>` : ''}
                         ${countdownHtml}
                     </div>
                     
@@ -432,7 +439,7 @@
             }
 
             try {
-                const token = localStorage.getItem('token');
+                const token = localStorage.getItem('accessToken') || localStorage.getItem('token');
                 const response = await fetch(`/api/booking/${bookingId}/cancel`, {
                     method: 'POST',
                     headers: {
@@ -464,6 +471,10 @@
                 timeStyle: 'short'
             });
 
+            const voucherLine = booking.paymentMode === 'VOUCHER'
+                ? `\nPaid Via: Voucher ${booking.voucherCode || ''} (${booking.voucherTicketsUsed || booking.numberOfSeats} free ticket(s) used, ₹0 paid)`
+                : `\nTotal Amount: ₹${booking.totalAmount}`;
+
             alert(`
 BOOKING DETAILS
 ================
@@ -475,8 +486,7 @@ Theatre: ${booking.theatreName}
 Screen: ${booking.screenName}
 Date & Time: ${showTime}
 
-Seats: ${booking.seatCodes.join(', ')}
-Total Amount: ₹${booking.totalAmount}
+Seats: ${booking.seatCodes.join(', ')}${voucherLine}
 Status: ${booking.status.replace('_', ' ')}
 ${booking.holdExpiresAt ? 'Hold Expires: ' + new Date(booking.holdExpiresAt).toLocaleString() : ''}
             `);
